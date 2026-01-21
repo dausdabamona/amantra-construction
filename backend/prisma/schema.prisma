@@ -1,0 +1,565 @@
+// AMANTRA Construction B2B - Database Schema
+// Sistem Kontrak Konstruksi Berbasis Termin dengan Verifikasi Berlapis
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+enum UserRole {
+  OWNER       // Pemberi Kerja
+  CONTRACTOR  // Kontraktor
+  SUPERVISOR  // Pengawas
+  WITNESS     // Saksi Ahli
+  ADMIN       // Admin Sistem
+  AUDITOR     // Auditor
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model User {
+  id                String      @id @default(uuid())
+  email             String      @unique
+  passwordHash      String
+  role              UserRole
+  status            UserStatus  @default(PENDING_VERIFICATION)
+
+  // Profile
+  fullName          String
+  phone             String?
+  company           String?
+  position          String?
+  licenseNumber     String?     // Nomor izin untuk pengawas/saksi ahli
+  specialization    String?     // Bidang keahlian
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?   // Soft delete
+  lastLoginAt       DateTime?
+
+  // Relations
+  ownedProjects     Project[]   @relation("ProjectOwner")
+  contractedProjects Project[]  @relation("ProjectContractor")
+  supervisedProjects ProjectSupervisor[]
+  witnessedProjects  ProjectWitness[]
+  progressReports   ProgressReport[]
+  verifications     Verification[]
+  auditLogs         AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+// ============================================
+// PROJECT
+// ============================================
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+model Project {
+  id                String        @id @default(uuid())
+  projectCode       String        @unique
+  name              String
+  description       String?
+  location          String
+
+  // Financial
+  estimatedBudget   Float
+  currency          String        @default("IDR")
+
+  // Timeline
+  startDate         DateTime
+  endDate           DateTime
+  actualEndDate     DateTime?
+
+  // Status
+  status            ProjectStatus @default(DRAFT)
+  completionPercentage Float      @default(0)
+
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  ownerId           String
+  owner             User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  contractorId      String?
+  contractor        User?         @relation("ProjectContractor", fields: [contractorId], references: [id])
+
+  supervisors       ProjectSupervisor[]
+  witnesses         ProjectWitness[]
+  contracts         Contract[]
+  auditLogs         AuditLog[]
+
+  @@index([projectCode])
+  @@index([status])
+  @@index([ownerId])
+  @@index([contractorId])
+}
+
+model ProjectSupervisor {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  assignedAt  DateTime  @default(now())
+  removedAt   DateTime?
+  isActive    Boolean   @default(true)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectWitness {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  assignedAt  DateTime  @default(now())
+  removedAt   DateTime?
+  isActive    Boolean   @default(true)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================
+// CONTRACT
+// ============================================
+
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  DISPUTED
+}
+
+model Contract {
+  id                String          @id @default(uuid())
+  contractNumber    String          @unique
+
+  // Details
+  title             String
+  description       String?
+  scope             String          // Lingkup pekerjaan
+
+  // Financial
+  totalValue        Float
+  currency          String          @default("IDR")
+  retentionPercentage Float         @default(5) // Retensi %
+
+  // Timeline
+  signedDate        DateTime?
+  effectiveDate     DateTime?
+  completionDate    DateTime?
+
+  // Status
+  status            ContractStatus  @default(DRAFT)
+
+  // Terms & Conditions (stored as JSON string for SQLite)
+  termsConditions   String?
+
+  // Digital signature hashes
+  ownerSignatureHash      String?
+  contractorSignatureHash String?
+
+  // Timestamps
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id])
+
+  workPhases        WorkPhase[]
+  payments          Payment[]
+  evidenceFiles     EvidenceFile[]
+  auditLogs         AuditLog[]
+
+  @@index([contractNumber])
+  @@index([projectId])
+  @@index([status])
+}
+
+// ============================================
+// WORK PHASES (TERMIN)
+// ============================================
+
+enum PhaseStatus {
+  PENDING
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  VERIFIED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model WorkPhase {
+  id                String        @id @default(uuid())
+  phaseNumber       Int
+  name              String
+  description       String?
+
+  // Work scope
+  deliverables      String        // JSON string of deliverables
+  acceptanceCriteria String?      // Kriteria penerimaan
+
+  // Financial
+  phaseValue        Float
+  paymentPercentage Float         // % dari total kontrak
+
+  // Timeline
+  plannedStartDate  DateTime
+  plannedEndDate    DateTime
+  actualStartDate   DateTime?
+  actualEndDate     DateTime?
+
+  // Progress
+  status            PhaseStatus   @default(PENDING)
+  completionPercentage Float      @default(0)
+
+  // Verification requirements
+  minVerifications  Int           @default(2) // Minimum verifikasi yang dibutuhkan
+
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  contractId        String
+  contract          Contract      @relation(fields: [contractId], references: [id])
+
+  progressReports   ProgressReport[]
+  verifications     Verification[]
+  payments          Payment[]
+
+  @@unique([contractId, phaseNumber])
+  @@index([contractId])
+  @@index([status])
+}
+
+// ============================================
+// PROGRESS REPORTS
+// ============================================
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  VERIFIED
+  REJECTED
+}
+
+model ProgressReport {
+  id                String        @id @default(uuid())
+  reportNumber      String        @unique
+
+  // Content
+  title             String
+  description       String
+  workCompleted     String        // JSON string of work completed
+  issuesEncountered String?
+  nextSteps         String?
+
+  // Progress
+  progressPercentage Float
+
+  // Status
+  status            ReportStatus  @default(DRAFT)
+  submittedAt       DateTime?
+
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  workPhaseId       String
+  workPhase         WorkPhase     @relation(fields: [workPhaseId], references: [id])
+
+  submittedById     String
+  submittedBy       User          @relation(fields: [submittedById], references: [id])
+
+  verifications     Verification[]
+  evidenceFiles     EvidenceFile[]
+
+  @@index([workPhaseId])
+  @@index([submittedById])
+  @@index([status])
+}
+
+// ============================================
+// VERIFICATIONS (Multi-sign)
+// ============================================
+
+enum VerificationType {
+  SUPERVISOR_VERIFICATION
+  WITNESS_VERIFICATION
+  OWNER_APPROVAL
+  TECHNICAL_REVIEW
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+model Verification {
+  id                String              @id @default(uuid())
+
+  // Verification details
+  type              VerificationType
+  status            VerificationStatus  @default(PENDING)
+
+  // Content
+  comments          String?
+  findings          String?             // JSON string of findings
+  recommendations   String?
+
+  // Checklist (JSON string)
+  checklistItems    String?
+
+  // Digital signature
+  signatureHash     String?
+  verifiedAt        DateTime?
+
+  // Timestamps
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  workPhaseId       String?
+  workPhase         WorkPhase?          @relation(fields: [workPhaseId], references: [id])
+
+  progressReportId  String?
+  progressReport    ProgressReport?     @relation(fields: [progressReportId], references: [id])
+
+  verifierId        String
+  verifier          User                @relation(fields: [verifierId], references: [id])
+
+  evidenceFiles     EvidenceFile[]
+
+  @@index([workPhaseId])
+  @@index([progressReportId])
+  @@index([verifierId])
+  @@index([status])
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  AWAITING_VERIFICATION
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  QRIS
+  RTGS
+  ESCROW
+  SMART_CONTRACT
+}
+
+model Payment {
+  id                String          @id @default(uuid())
+  paymentNumber     String          @unique
+
+  // Amount
+  amount            Float
+  currency          String          @default("IDR")
+
+  // Payment details
+  method            PaymentMethod?
+  status            PaymentStatus   @default(PENDING)
+
+  // Bank details (encrypted in production)
+  bankName          String?
+  accountNumber     String?
+  accountName       String?
+
+  // Transaction
+  transactionRef    String?
+  paidAt            DateTime?
+
+  // For smart contract integration
+  blockchainTxHash  String?
+  smartContractRef  String?
+
+  // Timestamps
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  contractId        String
+  contract          Contract        @relation(fields: [contractId], references: [id])
+
+  workPhaseId       String?
+  workPhase         WorkPhase?      @relation(fields: [workPhaseId], references: [id])
+
+  evidenceFiles     EvidenceFile[]
+
+  @@index([contractId])
+  @@index([workPhaseId])
+  @@index([status])
+}
+
+// ============================================
+// EVIDENCE FILES
+// ============================================
+
+enum EvidenceType {
+  PHOTO
+  VIDEO
+  DOCUMENT
+  RECEIPT
+  CERTIFICATE
+  SIGNATURE
+  OTHER
+}
+
+model EvidenceFile {
+  id                String        @id @default(uuid())
+
+  // File info
+  fileName          String
+  originalName      String
+  mimeType          String
+  fileSize          Int           // in bytes
+  filePath          String
+
+  // Integrity
+  fileHash          String        // SHA-256 hash for integrity verification
+  hashAlgorithm     String        @default("SHA-256")
+
+  // Metadata
+  type              EvidenceType
+  description       String?
+  capturedAt        DateTime?     // When photo/video was taken
+  location          String?       // GPS coordinates if available
+
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  uploadedAt        DateTime      @default(now())
+  deletedAt         DateTime?
+
+  // Relations - can belong to multiple entities
+  contractId        String?
+  contract          Contract?     @relation(fields: [contractId], references: [id])
+
+  progressReportId  String?
+  progressReport    ProgressReport? @relation(fields: [progressReportId], references: [id])
+
+  verificationId    String?
+  verification      Verification? @relation(fields: [verificationId], references: [id])
+
+  paymentId         String?
+  payment           Payment?      @relation(fields: [paymentId], references: [id])
+
+  @@index([contractId])
+  @@index([progressReportId])
+  @@index([verificationId])
+  @@index([fileHash])
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  VERIFY
+  APPROVE
+  REJECT
+  SUBMIT
+  UPLOAD
+  DOWNLOAD
+  SIGN
+  PAYMENT
+}
+
+model AuditLog {
+  id                String      @id @default(uuid())
+
+  // What happened
+  action            AuditAction
+  entityType        String      // e.g., "Project", "Contract", "Verification"
+  entityId          String
+
+  // Details
+  description       String
+  oldValue          String?     // JSON string of previous state
+  newValue          String?     // JSON string of new state
+
+  // Context
+  ipAddress         String?
+  userAgent         String?
+
+  // Timestamps
+  createdAt         DateTime    @default(now())
+
+  // Relations
+  userId            String
+  user              User        @relation(fields: [userId], references: [id])
+
+  projectId         String?
+  project           Project?    @relation(fields: [projectId], references: [id])
+
+  contractId        String?
+  contract          Contract?   @relation(fields: [contractId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([projectId])
+  @@index([contractId])
+  @@index([createdAt])
+  @@index([action])
+}
