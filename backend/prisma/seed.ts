@@ -1,27 +1,70 @@
-import { PrismaClient, UserRole, UserStatus, ProjectStatus, ContractStatus, PhaseStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
+// Define enums locally since Prisma types may not be generated
+const UserRole = {
+  OWNER: 'OWNER',
+  CONTRACTOR: 'CONTRACTOR',
+  SUPERVISOR: 'SUPERVISOR',
+  WITNESS: 'WITNESS',
+} as const;
+
+const TermStatus = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  VERIFIED: 'VERIFIED',
+  VALID: 'VALID',
+  REJECTED: 'REJECTED',
+  PAID: 'PAID',
+} as const;
+
+const VerificationRole = {
+  SUPERVISOR: 'SUPERVISOR',
+  WITNESS: 'WITNESS',
+} as const;
+
+const VerificationStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+const PaymentStatus = {
+  PENDING: 'PENDING',
+  READY: 'READY',
+  PAID: 'PAID',
+} as const;
+
+const AuditAction = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  SUBMIT_PROGRESS: 'SUBMIT_PROGRESS',
+  VERIFY_APPROVE: 'VERIFY_APPROVE',
+  VERIFY_REJECT: 'VERIFY_REJECT',
+  PAYMENT_CONFIRM: 'PAYMENT_CONFIRM',
+} as const;
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log('🌱 Seeding AMANTRA MVP database...\n');
 
   // Clean existing data
   await prisma.auditLog.deleteMany();
-  await prisma.evidenceFile.deleteMany();
   await prisma.verification.deleteMany();
   await prisma.payment.deleteMany();
-  await prisma.progressReport.deleteMany();
-  await prisma.workPhase.deleteMany();
+  await prisma.progress.deleteMany();
+  await prisma.term.deleteMany();
   await prisma.contract.deleteMany();
-  await prisma.projectWitness.deleteMany();
-  await prisma.projectSupervisor.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
 
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
-  // Create Users
+  // ============================================
+  // CREATE 4 USERS (1 per role)
+  // ============================================
   console.log('Creating users...');
 
   const owner = await prisma.user.create({
@@ -29,11 +72,9 @@ async function main() {
       email: 'owner@amantra.id',
       passwordHash,
       role: UserRole.OWNER,
-      status: UserStatus.ACTIVE,
-      fullName: 'Budi Santoso',
-      phone: '+6281234567890',
+      name: 'Budi Santoso',
+      phone: '081234567890',
       company: 'PT Maju Bersama',
-      position: 'Direktur Utama',
     },
   });
 
@@ -42,11 +83,9 @@ async function main() {
       email: 'kontraktor@amantra.id',
       passwordHash,
       role: UserRole.CONTRACTOR,
-      status: UserStatus.ACTIVE,
-      fullName: 'Andi Wijaya',
-      phone: '+6281234567891',
+      name: 'Andi Wijaya',
+      phone: '081234567891',
       company: 'PT Konstruksi Handal',
-      position: 'Project Manager',
     },
   });
 
@@ -55,13 +94,9 @@ async function main() {
       email: 'pengawas@amantra.id',
       passwordHash,
       role: UserRole.SUPERVISOR,
-      status: UserStatus.ACTIVE,
-      fullName: 'Ir. Dewi Lestari',
-      phone: '+6281234567892',
+      name: 'Ir. Dewi Lestari',
+      phone: '081234567892',
       company: 'Konsultan Pengawas Jaya',
-      position: 'Pengawas Lapangan',
-      licenseNumber: 'SKA-TK-001234',
-      specialization: 'Teknik Sipil',
     },
   });
 
@@ -70,253 +105,301 @@ async function main() {
       email: 'saksi@amantra.id',
       passwordHash,
       role: UserRole.WITNESS,
-      status: UserStatus.ACTIVE,
-      fullName: 'Dr. Rahmat Hidayat',
-      phone: '+6281234567893',
-      company: 'Universitas Teknologi Indonesia',
-      position: 'Dosen & Konsultan',
-      licenseNumber: 'SKA-AK-005678',
-      specialization: 'Struktur Bangunan',
+      name: 'Dr. Rahmat Hidayat',
+      phone: '081234567893',
+      company: 'Universitas Teknik Indonesia',
     },
   });
 
-  const admin = await prisma.user.create({
-    data: {
-      email: 'admin@amantra.id',
-      passwordHash,
-      role: UserRole.ADMIN,
-      status: UserStatus.ACTIVE,
-      fullName: 'Admin Sistem',
-      phone: '+6281234567894',
-      company: 'AMANTRA',
-      position: 'System Administrator',
-    },
-  });
+  console.log('✓ 4 users created\n');
 
-  const auditor = await prisma.user.create({
-    data: {
-      email: 'auditor@amantra.id',
-      passwordHash,
-      role: UserRole.AUDITOR,
-      status: UserStatus.ACTIVE,
-      fullName: 'Siti Nurhaliza',
-      phone: '+6281234567895',
-      company: 'KAP Audit Prima',
-      position: 'Senior Auditor',
-      licenseNumber: 'CPA-12345',
-    },
-  });
-
-  console.log('Users created ✓');
-
-  // Create Project
+  // ============================================
+  // CREATE PROJECT
+  // ============================================
   console.log('Creating project...');
 
   const project = await prisma.project.create({
     data: {
-      projectCode: 'PRJ-2024-DEMO01',
       name: 'Pembangunan Gedung Kantor PT Maju Bersama',
-      description: 'Proyek pembangunan gedung perkantoran 5 lantai dengan basement',
+      description: 'Proyek pembangunan gedung perkantoran 3 lantai',
       location: 'Jl. Sudirman No. 123, Jakarta Pusat',
-      estimatedBudget: 15000000000,
-      currency: 'IDR',
-      startDate: new Date('2024-01-15'),
-      endDate: new Date('2024-12-31'),
-      status: ProjectStatus.ACTIVE,
       ownerId: owner.id,
       contractorId: contractor.id,
+      supervisorId: supervisor.id,
+      witnessId: witness.id,
     },
   });
 
-  // Assign supervisor and witness to project
-  await prisma.projectSupervisor.create({
-    data: {
-      projectId: project.id,
-      userId: supervisor.id,
-    },
-  });
+  console.log('✓ Project created\n');
 
-  await prisma.projectWitness.create({
-    data: {
-      projectId: project.id,
-      userId: witness.id,
-    },
-  });
-
-  console.log('Project created ✓');
-
-  // Create Contract
+  // ============================================
+  // CREATE CONTRACT
+  // ============================================
   console.log('Creating contract...');
 
   const contract = await prisma.contract.create({
     data: {
-      contractNumber: 'KTR-202401-DEMO01',
-      title: 'Kontrak Pekerjaan Struktur Gedung Kantor',
-      description: 'Kontrak untuk pekerjaan struktur utama gedung',
-      scope: 'Pekerjaan struktur beton bertulang, pondasi, kolom, balok, dan plat lantai 1-5',
-      totalValue: 8000000000,
-      currency: 'IDR',
-      retentionPercentage: 5,
-      status: ContractStatus.ACTIVE,
-      signedDate: new Date('2024-01-10'),
-      effectiveDate: new Date('2024-01-15'),
+      contractNumber: 'KTR-2024-001',
+      totalValue: 5000000000, // 5 Miliar
+      termCount: 3,
       projectId: project.id,
-      termsConditions: JSON.stringify({
-        paymentTerms: 'Pembayaran per termin setelah verifikasi',
-        warranty: '2 tahun',
-        penalty: '0.1% per hari keterlambatan',
-      }),
     },
   });
 
-  console.log('Contract created ✓');
+  console.log('✓ Contract created\n');
 
-  // Create Work Phases (Termin)
-  console.log('Creating work phases...');
+  // ============================================
+  // CREATE 3 TERMS (TERMIN)
+  // ============================================
+  console.log('Creating terms...');
 
-  const phases = [
-    {
-      phaseNumber: 1,
+  // Termin 1: Pekerjaan Pondasi - PAID (sudah selesai)
+  const term1 = await prisma.term.create({
+    data: {
+      termNumber: 1,
       name: 'Pekerjaan Pondasi',
-      description: 'Galian dan pemasangan pondasi tiang pancang dan pile cap',
-      deliverables: JSON.stringify([
-        'Galian tanah',
-        'Pemasangan tiang pancang',
-        'Pile cap',
-        'Sloof',
-      ]),
-      acceptanceCriteria: 'Sesuai gambar kerja dan spesifikasi teknis',
-      phaseValue: 1600000000,
-      paymentPercentage: 20,
-      plannedStartDate: new Date('2024-01-15'),
-      plannedEndDate: new Date('2024-03-15'),
-      status: PhaseStatus.VERIFIED,
-      completionPercentage: 100,
-      actualStartDate: new Date('2024-01-15'),
-      actualEndDate: new Date('2024-03-10'),
+      description: 'Galian, pemancangan, dan pile cap',
+      percentage: 30,
+      value: 1500000000, // 1.5 Miliar
+      status: TermStatus.PAID,
+      contractId: contract.id,
     },
-    {
-      phaseNumber: 2,
-      name: 'Pekerjaan Struktur Lantai 1-2',
-      description: 'Pekerjaan kolom, balok, dan plat lantai 1 dan 2',
-      deliverables: JSON.stringify([
-        'Kolom lantai 1',
-        'Balok lantai 1',
-        'Plat lantai 1',
-        'Kolom lantai 2',
-        'Balok lantai 2',
-        'Plat lantai 2',
-      ]),
-      phaseValue: 2400000000,
-      paymentPercentage: 30,
-      plannedStartDate: new Date('2024-03-16'),
-      plannedEndDate: new Date('2024-06-15'),
-      status: PhaseStatus.IN_PROGRESS,
-      completionPercentage: 65,
-      actualStartDate: new Date('2024-03-16'),
-    },
-    {
-      phaseNumber: 3,
-      name: 'Pekerjaan Struktur Lantai 3-5',
-      description: 'Pekerjaan kolom, balok, dan plat lantai 3, 4, dan 5',
-      deliverables: JSON.stringify([
-        'Struktur lantai 3',
-        'Struktur lantai 4',
-        'Struktur lantai 5',
-        'Atap',
-      ]),
-      phaseValue: 2400000000,
-      paymentPercentage: 30,
-      plannedStartDate: new Date('2024-06-16'),
-      plannedEndDate: new Date('2024-09-15'),
-      status: PhaseStatus.PENDING,
-      completionPercentage: 0,
-    },
-    {
-      phaseNumber: 4,
-      name: 'Pekerjaan Finishing Struktur',
-      description: 'Finishing struktur dan serah terima',
-      deliverables: JSON.stringify([
-        'Waterproofing',
-        'Expansion joint',
-        'Pembersihan',
-        'Dokumentasi as-built',
-      ]),
-      phaseValue: 1600000000,
-      paymentPercentage: 20,
-      plannedStartDate: new Date('2024-09-16'),
-      plannedEndDate: new Date('2024-12-15'),
-      status: PhaseStatus.PENDING,
-      completionPercentage: 0,
-    },
-  ];
+  });
 
-  for (const phase of phases) {
-    await prisma.workPhase.create({
-      data: {
-        ...phase,
-        contractId: contract.id,
-        minVerifications: 2,
-      },
-    });
-  }
+  // Termin 2: Struktur Lantai 1-2 - VALID (siap dibayar)
+  const term2 = await prisma.term.create({
+    data: {
+      termNumber: 2,
+      name: 'Struktur Lantai 1-2',
+      description: 'Kolom, balok, dan plat lantai 1-2',
+      percentage: 40,
+      value: 2000000000, // 2 Miliar
+      status: TermStatus.VALID,
+      contractId: contract.id,
+    },
+  });
 
-  console.log('Work phases created ✓');
+  // Termin 3: Struktur Lantai 3 & Atap - SUBMITTED (menunggu verifikasi)
+  const term3 = await prisma.term.create({
+    data: {
+      termNumber: 3,
+      name: 'Struktur Lantai 3 & Atap',
+      description: 'Kolom, balok, plat lantai 3, dan rangka atap',
+      percentage: 30,
+      value: 1500000000, // 1.5 Miliar
+      status: TermStatus.SUBMITTED,
+      contractId: contract.id,
+    },
+  });
 
-  // Create sample audit logs
+  console.log('✓ 3 terms created\n');
+
+  // ============================================
+  // CREATE PROGRESS FOR EACH TERM
+  // ============================================
+  console.log('Creating progress reports...');
+
+  // Progress for Term 1 (completed)
+  await prisma.progress.create({
+    data: {
+      description: 'Pekerjaan pondasi selesai 100%. Galian selesai, tiang pancang terpasang, pile cap sudah dicor.',
+      photoUrl: '/uploads/progress/term1-final.jpg',
+      claimPercentage: 100,
+      termId: term1.id,
+      uploadedById: contractor.id,
+    },
+  });
+
+  // Progress for Term 2 (valid, siap dibayar)
+  await prisma.progress.create({
+    data: {
+      description: 'Struktur lantai 1 dan 2 selesai. Kolom dan balok sudah dicor, plat lantai selesai.',
+      photoUrl: '/uploads/progress/term2-final.jpg',
+      claimPercentage: 100,
+      termId: term2.id,
+      uploadedById: contractor.id,
+    },
+  });
+
+  // Progress for Term 3 (submitted, menunggu verifikasi)
+  await prisma.progress.create({
+    data: {
+      description: 'Pengecoran kolom lantai 3 selesai 80%. Bekisting balok sedang dipasang.',
+      photoUrl: '/uploads/progress/term3-progress.jpg',
+      claimPercentage: 80,
+      termId: term3.id,
+      uploadedById: contractor.id,
+    },
+  });
+
+  console.log('✓ Progress reports created\n');
+
+  // ============================================
+  // CREATE VERIFICATIONS
+  // ============================================
+  console.log('Creating verifications...');
+
+  // Verifications for Term 1 (both approved)
+  await prisma.verification.create({
+    data: {
+      role: VerificationRole.SUPERVISOR,
+      status: VerificationStatus.APPROVED,
+      notes: 'Pekerjaan sesuai spesifikasi, kualitas baik.',
+      verifiedAt: new Date('2024-01-15'),
+      termId: term1.id,
+      verifierId: supervisor.id,
+    },
+  });
+
+  await prisma.verification.create({
+    data: {
+      role: VerificationRole.WITNESS,
+      status: VerificationStatus.APPROVED,
+      notes: 'Struktur pondasi memenuhi standar teknis.',
+      verifiedAt: new Date('2024-01-16'),
+      termId: term1.id,
+      verifierId: witness.id,
+    },
+  });
+
+  // Verifications for Term 2 (both approved)
+  await prisma.verification.create({
+    data: {
+      role: VerificationRole.SUPERVISOR,
+      status: VerificationStatus.APPROVED,
+      notes: 'Struktur lantai 1-2 sesuai gambar kerja.',
+      verifiedAt: new Date('2024-02-20'),
+      termId: term2.id,
+      verifierId: supervisor.id,
+    },
+  });
+
+  await prisma.verification.create({
+    data: {
+      role: VerificationRole.WITNESS,
+      status: VerificationStatus.APPROVED,
+      notes: 'Mutu beton dan besi sesuai spesifikasi.',
+      verifiedAt: new Date('2024-02-21'),
+      termId: term2.id,
+      verifierId: witness.id,
+    },
+  });
+
+  // Term 3 - No verifications yet (waiting)
+
+  console.log('✓ Verifications created\n');
+
+  // ============================================
+  // CREATE PAYMENTS
+  // ============================================
+  console.log('Creating payments...');
+
+  // Payment for Term 1 (PAID)
+  await prisma.payment.create({
+    data: {
+      amount: 1500000000,
+      status: PaymentStatus.PAID,
+      proofUrl: '/uploads/payments/term1-bukti.jpg',
+      transactionRef: 'TRF-20240120-001',
+      paidAt: new Date('2024-01-20'),
+      termId: term1.id,
+    },
+  });
+
+  // Payment for Term 2 (READY - siap dibayar)
+  await prisma.payment.create({
+    data: {
+      amount: 2000000000,
+      status: PaymentStatus.READY,
+      termId: term2.id,
+    },
+  });
+
+  // Payment for Term 3 (PENDING - belum valid)
+  await prisma.payment.create({
+    data: {
+      amount: 1500000000,
+      status: PaymentStatus.PENDING,
+      termId: term3.id,
+    },
+  });
+
+  console.log('✓ Payments created\n');
+
+  // ============================================
+  // CREATE AUDIT LOGS
+  // ============================================
   console.log('Creating audit logs...');
 
   await prisma.auditLog.createMany({
     data: [
       {
-        userId: owner.id,
-        action: 'CREATE',
+        action: AuditAction.CREATE,
         entityType: 'Project',
         entityId: project.id,
         description: 'Proyek "Pembangunan Gedung Kantor PT Maju Bersama" dibuat',
-        projectId: project.id,
+        userId: owner.id,
       },
       {
-        userId: owner.id,
-        action: 'CREATE',
+        action: AuditAction.CREATE,
         entityType: 'Contract',
         entityId: contract.id,
-        description: 'Kontrak "Kontrak Pekerjaan Struktur Gedung Kantor" dibuat',
-        projectId: project.id,
-        contractId: contract.id,
+        description: 'Kontrak KTR-2024-001 dibuat dengan nilai Rp 5.000.000.000',
+        userId: owner.id,
       },
       {
+        action: AuditAction.SUBMIT_PROGRESS,
+        entityType: 'Term',
+        entityId: term1.id,
+        description: 'Progres termin 1 diajukan oleh kontraktor',
         userId: contractor.id,
-        action: 'UPDATE',
-        entityType: 'WorkPhase',
-        entityId: 'phase-1',
-        description: 'Termin 1 dimulai',
-        contractId: contract.id,
       },
       {
+        action: AuditAction.VERIFY_APPROVE,
+        entityType: 'Verification',
+        entityId: term1.id,
+        description: 'Termin 1 disetujui oleh Pengawas',
         userId: supervisor.id,
-        action: 'VERIFY',
-        entityType: 'WorkPhase',
-        entityId: 'phase-1',
-        description: 'Termin 1 diverifikasi oleh pengawas',
-        contractId: contract.id,
+      },
+      {
+        action: AuditAction.VERIFY_APPROVE,
+        entityType: 'Verification',
+        entityId: term1.id,
+        description: 'Termin 1 disetujui oleh Saksi',
+        userId: witness.id,
+      },
+      {
+        action: AuditAction.PAYMENT_CONFIRM,
+        entityType: 'Payment',
+        entityId: term1.id,
+        description: 'Pembayaran termin 1 dikonfirmasi sebesar Rp 1.500.000.000',
+        userId: owner.id,
       },
     ],
   });
 
-  console.log('Audit logs created ✓');
+  console.log('✓ Audit logs created\n');
 
-  console.log('\n✅ Database seeded successfully!\n');
-  console.log('Demo accounts:');
-  console.log('----------------------------');
-  console.log('Owner:      owner@amantra.id');
-  console.log('Contractor: kontraktor@amantra.id');
-  console.log('Supervisor: pengawas@amantra.id');
-  console.log('Witness:    saksi@amantra.id');
-  console.log('Admin:      admin@amantra.id');
-  console.log('Auditor:    auditor@amantra.id');
-  console.log('----------------------------');
-  console.log('Password:   Password123!');
+  // ============================================
+  // SUMMARY
+  // ============================================
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('  ✅ AMANTRA MVP Database Seeded Successfully!');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('\n  Demo Accounts (Password: Password123!):\n');
+  console.log('  ┌─────────────┬──────────────────────┬─────────────────────┐');
+  console.log('  │ Role        │ Email                │ Name                │');
+  console.log('  ├─────────────┼──────────────────────┼─────────────────────┤');
+  console.log('  │ Owner       │ owner@amantra.id     │ Budi Santoso        │');
+  console.log('  │ Kontraktor  │ kontraktor@amantra.id│ Andi Wijaya         │');
+  console.log('  │ Pengawas    │ pengawas@amantra.id  │ Ir. Dewi Lestari    │');
+  console.log('  │ Saksi       │ saksi@amantra.id     │ Dr. Rahmat Hidayat  │');
+  console.log('  └─────────────┴──────────────────────┴─────────────────────┘');
+  console.log('\n  Demo Project Status:');
+  console.log('  • Termin 1: ✓ TERBAYAR (Rp 1.5M)');
+  console.log('  • Termin 2: ⏳ VALID - Siap Dibayar (Rp 2M)');
+  console.log('  • Termin 3: 🔄 DIAJUKAN - Menunggu Verifikasi (Rp 1.5M)');
+  console.log('\n═══════════════════════════════════════════════════════════\n');
 }
 
 main()

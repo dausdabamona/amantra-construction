@@ -193,10 +193,10 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData({ email: 'admin@amantra.id', password: 'Password123!' })}
+                  onClick={() => setFormData({ email: 'saksi@amantra.id', password: 'Password123!' })}
                   className="px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
                 >
-                  Admin
+                  Saksi
                 </button>
               </div>
             </div>

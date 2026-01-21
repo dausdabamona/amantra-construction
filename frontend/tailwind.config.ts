@@ -20,6 +20,7 @@ const config: Config = {
           700: '#1d4ed8',
           800: '#1e40af',
           900: '#1e3a8a',
+          950: '#172554',
         },
         amantra: {
           blue: '#1e40af',

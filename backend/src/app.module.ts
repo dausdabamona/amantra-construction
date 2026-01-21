@@ -1,16 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { UsersModule } from './modules/users/users.module';
-import { ProjectsModule } from './modules/projects/projects.module';
-import { ContractsModule } from './modules/contracts/contracts.module';
-import { WorkPhasesModule } from './modules/work-phases/work-phases.module';
-import { ProgressReportsModule } from './modules/progress-reports/progress-reports.module';
-import { VerificationsModule } from './modules/verifications/verifications.module';
-import { PaymentsModule } from './modules/payments/payments.module';
-import { EvidenceModule } from './modules/evidence/evidence.module';
-import { AuditModule } from './modules/audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { ProjectsModule } from './projects/projects.module';
+import { TermsModule } from './terms/terms.module';
+import { ProgressModule } from './progress/progress.module';
+import { VerificationsModule } from './verifications/verifications.module';
+import { PaymentsModule } from './payments/payments.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -18,16 +17,17 @@ import { AuditModule } from './modules/audit/audit.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
     PrismaModule,
     AuthModule,
-    UsersModule,
     ProjectsModule,
-    ContractsModule,
-    WorkPhasesModule,
-    ProgressReportsModule,
+    TermsModule,
+    ProgressModule,
     VerificationsModule,
     PaymentsModule,
-    EvidenceModule,
     AuditModule,
   ],
 })

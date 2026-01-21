@@ -1,5 +1,6 @@
-// AMANTRA Construction B2B - Database Schema
-// Sistem Kontrak Konstruksi Berbasis Termin dengan Verifikasi Berlapis
+// AMANTRA Construction MVP 0.1
+// Sistem Kontrak Konstruksi Berbasis Amanah - Minimum Viable Product
+// Fokus: 1 Proyek → 1 Kontrak → Beberapa Termin → Upload Progres → Verifikasi Berlapis → Siap Dibayar
 
 generator client {
   provider = "prisma-client-js"
@@ -11,555 +12,256 @@ datasource db {
 }
 
 // ============================================
-// USER & AUTHENTICATION
+// USER - 4 ROLE ONLY
 // ============================================
 
 enum UserRole {
-  OWNER       // Pemberi Kerja
-  CONTRACTOR  // Kontraktor
-  SUPERVISOR  // Pengawas
-  WITNESS     // Saksi Ahli
-  ADMIN       // Admin Sistem
-  AUDITOR     // Auditor
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-  PENDING_VERIFICATION
+  OWNER       // Pemberi Kerja - Buat proyek, lihat status, konfirmasi pembayaran
+  CONTRACTOR  // Kontraktor - Upload progres
+  SUPERVISOR  // Pengawas - Verifikasi progres
+  WITNESS     // Saksi - Verifikasi progres
 }
 
 model User {
-  id                String      @id @default(uuid())
-  email             String      @unique
-  passwordHash      String
-  role              UserRole
-  status            UserStatus  @default(PENDING_VERIFICATION)
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          UserRole
+  name          String
+  phone         String?
+  company       String?
 
-  // Profile
-  fullName          String
-  phone             String?
-  company           String?
-  position          String?
-  licenseNumber     String?     // Nomor izin untuk pengawas/saksi ahli
-  specialization    String?     // Bidang keahlian
-
-  // Timestamps
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  deletedAt         DateTime?   // Soft delete
-  lastLoginAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
-  ownedProjects     Project[]   @relation("ProjectOwner")
-  contractedProjects Project[]  @relation("ProjectContractor")
-  supervisedProjects ProjectSupervisor[]
-  witnessedProjects  ProjectWitness[]
-  progressReports   ProgressReport[]
-  verifications     Verification[]
-  auditLogs         AuditLog[]
+  ownedProjects   Project[]         @relation("ProjectOwner")
+  contractedProjects Project[]      @relation("ProjectContractor")
+  supervisedProjects Project[]      @relation("ProjectSupervisor")
+  witnessedProjects  Project[]      @relation("ProjectWitness")
+  progressReports    Progress[]
+  verifications      Verification[]
+  auditLogs          AuditLog[]
 
   @@index([email])
   @@index([role])
-  @@index([status])
 }
 
 // ============================================
 // PROJECT
 // ============================================
 
-enum ProjectStatus {
-  DRAFT
-  ACTIVE
-  ON_HOLD
-  COMPLETED
-  CANCELLED
-  DISPUTED
-}
-
 model Project {
-  id                String        @id @default(uuid())
-  projectCode       String        @unique
-  name              String
-  description       String?
-  location          String
+  id            String    @id @default(uuid())
+  name          String
+  description   String?
+  location      String?
 
-  // Financial
-  estimatedBudget   Float
-  currency          String        @default("IDR")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  // Timeline
-  startDate         DateTime
-  endDate           DateTime
-  actualEndDate     DateTime?
+  // Owner
+  ownerId       String
+  owner         User      @relation("ProjectOwner", fields: [ownerId], references: [id])
 
-  // Status
-  status            ProjectStatus @default(DRAFT)
-  completionPercentage Float      @default(0)
+  // Kontraktor (assigned by owner)
+  contractorId  String?
+  contractor    User?     @relation("ProjectContractor", fields: [contractorId], references: [id])
 
-  // Timestamps
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  deletedAt         DateTime?
+  // Pengawas (assigned by owner)
+  supervisorId  String?
+  supervisor    User?     @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
 
-  // Relations
-  ownerId           String
-  owner             User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  // Saksi (assigned by owner)
+  witnessId     String?
+  witness       User?     @relation("ProjectWitness", fields: [witnessId], references: [id])
 
-  contractorId      String?
-  contractor        User?         @relation("ProjectContractor", fields: [contractorId], references: [id])
+  // One project has one contract
+  contract      Contract?
 
-  supervisors       ProjectSupervisor[]
-  witnesses         ProjectWitness[]
-  contracts         Contract[]
-  auditLogs         AuditLog[]
-
-  @@index([projectCode])
-  @@index([status])
   @@index([ownerId])
-  @@index([contractorId])
-}
-
-model ProjectSupervisor {
-  id          String    @id @default(uuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id])
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  assignedAt  DateTime  @default(now())
-  removedAt   DateTime?
-  isActive    Boolean   @default(true)
-
-  @@unique([projectId, userId])
-  @@index([projectId])
-  @@index([userId])
-}
-
-model ProjectWitness {
-  id          String    @id @default(uuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id])
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  assignedAt  DateTime  @default(now())
-  removedAt   DateTime?
-  isActive    Boolean   @default(true)
-
-  @@unique([projectId, userId])
-  @@index([projectId])
-  @@index([userId])
 }
 
 // ============================================
-// CONTRACT
+// CONTRACT - 1 per Project
 // ============================================
-
-enum ContractStatus {
-  DRAFT
-  PENDING_APPROVAL
-  ACTIVE
-  COMPLETED
-  TERMINATED
-  DISPUTED
-}
 
 model Contract {
-  id                String          @id @default(uuid())
-  contractNumber    String          @unique
+  id              String    @id @default(uuid())
+  contractNumber  String    @unique
+  totalValue      Float     // Nilai kontrak total
+  termCount       Int       // Jumlah termin
 
-  // Details
-  title             String
-  description       String?
-  scope             String          // Lingkup pekerjaan
-
-  // Financial
-  totalValue        Float
-  currency          String          @default("IDR")
-  retentionPercentage Float         @default(5) // Retensi %
-
-  // Timeline
-  signedDate        DateTime?
-  effectiveDate     DateTime?
-  completionDate    DateTime?
-
-  // Status
-  status            ContractStatus  @default(DRAFT)
-
-  // Terms & Conditions (stored as JSON string for SQLite)
-  termsConditions   String?
-
-  // Digital signature hashes
-  ownerSignatureHash      String?
-  contractorSignatureHash String?
-
-  // Timestamps
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
-  projectId         String
-  project           Project         @relation(fields: [projectId], references: [id])
+  projectId       String    @unique
+  project         Project   @relation(fields: [projectId], references: [id])
 
-  workPhases        WorkPhase[]
-  payments          Payment[]
-  evidenceFiles     EvidenceFile[]
-  auditLogs         AuditLog[]
+  terms           Term[]
 
   @@index([contractNumber])
-  @@index([projectId])
-  @@index([status])
 }
 
 // ============================================
-// WORK PHASES (TERMIN)
+// TERM (TERMIN)
+// Status flow: DRAFT → SUBMITTED → VERIFIED → VALID → PAID
 // ============================================
 
-enum PhaseStatus {
-  PENDING
-  IN_PROGRESS
-  PENDING_VERIFICATION
-  VERIFIED
-  APPROVED
-  REJECTED
-  PAID
+enum TermStatus {
+  DRAFT           // Belum ada progres
+  SUBMITTED       // Progres sudah diajukan, menunggu verifikasi
+  VERIFIED        // Sedang diverifikasi (minimal 1 sudah approve)
+  VALID           // 2 verifikasi disetujui, siap dibayar
+  REJECTED        // Ditolak, perlu revisi
+  PAID            // Sudah dibayar
 }
 
-model WorkPhase {
-  id                String        @id @default(uuid())
-  phaseNumber       Int
-  name              String
-  description       String?
+model Term {
+  id              String      @id @default(uuid())
+  termNumber      Int         // Termin ke-berapa (1, 2, 3, ...)
+  name            String      // Nama termin (e.g., "Pekerjaan Pondasi")
+  description     String?
+  percentage      Float       // Persentase dari total kontrak (e.g., 30%)
+  value           Float       // Nilai termin dalam Rupiah
+  status          TermStatus  @default(DRAFT)
 
-  // Work scope
-  deliverables      String        // JSON string of deliverables
-  acceptanceCriteria String?      // Kriteria penerimaan
-
-  // Financial
-  phaseValue        Float
-  paymentPercentage Float         // % dari total kontrak
-
-  // Timeline
-  plannedStartDate  DateTime
-  plannedEndDate    DateTime
-  actualStartDate   DateTime?
-  actualEndDate     DateTime?
-
-  // Progress
-  status            PhaseStatus   @default(PENDING)
-  completionPercentage Float      @default(0)
-
-  // Verification requirements
-  minVerifications  Int           @default(2) // Minimum verifikasi yang dibutuhkan
-
-  // Timestamps
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  deletedAt         DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   // Relations
-  contractId        String
-  contract          Contract      @relation(fields: [contractId], references: [id])
+  contractId      String
+  contract        Contract    @relation(fields: [contractId], references: [id])
 
-  progressReports   ProgressReport[]
-  verifications     Verification[]
-  payments          Payment[]
+  progress        Progress[]
+  verifications   Verification[]
+  payment         Payment?
 
-  @@unique([contractId, phaseNumber])
+  @@unique([contractId, termNumber])
   @@index([contractId])
   @@index([status])
 }
 
 // ============================================
-// PROGRESS REPORTS
+// PROGRESS - Upload progres oleh Kontraktor
 // ============================================
 
-enum ReportStatus {
-  DRAFT
-  SUBMITTED
-  UNDER_REVIEW
-  REVISION_REQUIRED
-  VERIFIED
-  REJECTED
-}
+model Progress {
+  id              String    @id @default(uuid())
+  description     String    // Deskripsi pekerjaan yang sudah dilakukan
+  photoUrl        String?   // URL foto bukti (local path)
+  claimPercentage Float     // Persentase klaim progres (e.g., 80%)
 
-model ProgressReport {
-  id                String        @id @default(uuid())
-  reportNumber      String        @unique
-
-  // Content
-  title             String
-  description       String
-  workCompleted     String        // JSON string of work completed
-  issuesEncountered String?
-  nextSteps         String?
-
-  // Progress
-  progressPercentage Float
-
-  // Status
-  status            ReportStatus  @default(DRAFT)
-  submittedAt       DateTime?
-
-  // Timestamps
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  deletedAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
-  workPhaseId       String
-  workPhase         WorkPhase     @relation(fields: [workPhaseId], references: [id])
+  termId          String
+  term            Term      @relation(fields: [termId], references: [id])
 
-  submittedById     String
-  submittedBy       User          @relation(fields: [submittedById], references: [id])
+  uploadedById    String
+  uploadedBy      User      @relation(fields: [uploadedById], references: [id])
 
-  verifications     Verification[]
-  evidenceFiles     EvidenceFile[]
-
-  @@index([workPhaseId])
-  @@index([submittedById])
-  @@index([status])
+  @@index([termId])
 }
 
 // ============================================
-// VERIFICATIONS (Multi-sign)
+// VERIFICATION - Verifikasi oleh Pengawas & Saksi
 // ============================================
 
-enum VerificationType {
-  SUPERVISOR_VERIFICATION
-  WITNESS_VERIFICATION
-  OWNER_APPROVAL
-  TECHNICAL_REVIEW
+enum VerificationRole {
+  SUPERVISOR  // Pengawas
+  WITNESS     // Saksi
 }
 
 enum VerificationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  REVISION_REQUESTED
+  PENDING   // Belum diverifikasi
+  APPROVED  // Disetujui
+  REJECTED  // Ditolak
 }
 
 model Verification {
-  id                String              @id @default(uuid())
+  id              String              @id @default(uuid())
+  role            VerificationRole    // Apakah ini verifikasi pengawas atau saksi
+  status          VerificationStatus  @default(PENDING)
+  notes           String?             // Catatan verifikasi
 
-  // Verification details
-  type              VerificationType
-  status            VerificationStatus  @default(PENDING)
-
-  // Content
-  comments          String?
-  findings          String?             // JSON string of findings
-  recommendations   String?
-
-  // Checklist (JSON string)
-  checklistItems    String?
-
-  // Digital signature
-  signatureHash     String?
-  verifiedAt        DateTime?
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  verifiedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   // Relations
-  workPhaseId       String?
-  workPhase         WorkPhase?          @relation(fields: [workPhaseId], references: [id])
+  termId          String
+  term            Term                @relation(fields: [termId], references: [id])
 
-  progressReportId  String?
-  progressReport    ProgressReport?     @relation(fields: [progressReportId], references: [id])
+  verifierId      String
+  verifier        User                @relation(fields: [verifierId], references: [id])
 
-  verifierId        String
-  verifier          User                @relation(fields: [verifierId], references: [id])
-
-  evidenceFiles     EvidenceFile[]
-
-  @@index([workPhaseId])
-  @@index([progressReportId])
+  @@unique([termId, role]) // Satu termin hanya bisa diverifikasi 1x per role
+  @@index([termId])
   @@index([verifierId])
-  @@index([status])
 }
 
 // ============================================
-// PAYMENTS
+// PAYMENT - Status pembayaran per termin
 // ============================================
 
 enum PaymentStatus {
-  PENDING
-  AWAITING_VERIFICATION
-  APPROVED
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum PaymentMethod {
-  BANK_TRANSFER
-  QRIS
-  RTGS
-  ESCROW
-  SMART_CONTRACT
+  PENDING     // Menunggu (belum valid)
+  READY       // Siap dibayar (status termin = VALID)
+  PAID        // Sudah dibayar
 }
 
 model Payment {
-  id                String          @id @default(uuid())
-  paymentNumber     String          @unique
+  id              String        @id @default(uuid())
+  amount          Float         // Jumlah yang dibayar
+  status          PaymentStatus @default(PENDING)
+  proofUrl        String?       // URL bukti transfer
+  transactionRef  String?       // Nomor referensi transfer
+  paidAt          DateTime?
 
-  // Amount
-  amount            Float
-  currency          String          @default("IDR")
-
-  // Payment details
-  method            PaymentMethod?
-  status            PaymentStatus   @default(PENDING)
-
-  // Bank details (encrypted in production)
-  bankName          String?
-  accountNumber     String?
-  accountName       String?
-
-  // Transaction
-  transactionRef    String?
-  paidAt            DateTime?
-
-  // For smart contract integration
-  blockchainTxHash  String?
-  smartContractRef  String?
-
-  // Timestamps
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   // Relations
-  contractId        String
-  contract          Contract        @relation(fields: [contractId], references: [id])
+  termId          String        @unique
+  term            Term          @relation(fields: [termId], references: [id])
 
-  workPhaseId       String?
-  workPhase         WorkPhase?      @relation(fields: [workPhaseId], references: [id])
-
-  evidenceFiles     EvidenceFile[]
-
-  @@index([contractId])
-  @@index([workPhaseId])
   @@index([status])
 }
 
 // ============================================
-// EVIDENCE FILES
-// ============================================
-
-enum EvidenceType {
-  PHOTO
-  VIDEO
-  DOCUMENT
-  RECEIPT
-  CERTIFICATE
-  SIGNATURE
-  OTHER
-}
-
-model EvidenceFile {
-  id                String        @id @default(uuid())
-
-  // File info
-  fileName          String
-  originalName      String
-  mimeType          String
-  fileSize          Int           // in bytes
-  filePath          String
-
-  // Integrity
-  fileHash          String        // SHA-256 hash for integrity verification
-  hashAlgorithm     String        @default("SHA-256")
-
-  // Metadata
-  type              EvidenceType
-  description       String?
-  capturedAt        DateTime?     // When photo/video was taken
-  location          String?       // GPS coordinates if available
-
-  // Timestamps
-  createdAt         DateTime      @default(now())
-  uploadedAt        DateTime      @default(now())
-  deletedAt         DateTime?
-
-  // Relations - can belong to multiple entities
-  contractId        String?
-  contract          Contract?     @relation(fields: [contractId], references: [id])
-
-  progressReportId  String?
-  progressReport    ProgressReport? @relation(fields: [progressReportId], references: [id])
-
-  verificationId    String?
-  verification      Verification? @relation(fields: [verificationId], references: [id])
-
-  paymentId         String?
-  payment           Payment?      @relation(fields: [paymentId], references: [id])
-
-  @@index([contractId])
-  @@index([progressReportId])
-  @@index([verificationId])
-  @@index([fileHash])
-}
-
-// ============================================
-// AUDIT LOGS
+// AUDIT LOG - Semua aksi tercatat
 // ============================================
 
 enum AuditAction {
   CREATE
-  READ
   UPDATE
   DELETE
   LOGIN
-  LOGOUT
-  VERIFY
-  APPROVE
-  REJECT
-  SUBMIT
-  UPLOAD
-  DOWNLOAD
-  SIGN
-  PAYMENT
+  SUBMIT_PROGRESS
+  VERIFY_APPROVE
+  VERIFY_REJECT
+  PAYMENT_CONFIRM
 }
 
 model AuditLog {
-  id                String      @id @default(uuid())
+  id          String      @id @default(uuid())
+  action      AuditAction
+  entityType  String      // "Project", "Contract", "Term", "Progress", "Verification", "Payment"
+  entityId    String
+  description String
+  oldValue    String?     // JSON
+  newValue    String?     // JSON
 
-  // What happened
-  action            AuditAction
-  entityType        String      // e.g., "Project", "Contract", "Verification"
-  entityId          String
+  createdAt   DateTime    @default(now())
 
-  // Details
-  description       String
-  oldValue          String?     // JSON string of previous state
-  newValue          String?     // JSON string of new state
-
-  // Context
-  ipAddress         String?
-  userAgent         String?
-
-  // Timestamps
-  createdAt         DateTime    @default(now())
-
-  // Relations
-  userId            String
-  user              User        @relation(fields: [userId], references: [id])
-
-  projectId         String?
-  project           Project?    @relation(fields: [projectId], references: [id])
-
-  contractId        String?
-  contract          Contract?   @relation(fields: [contractId], references: [id])
+  // Who did it
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([entityType, entityId])
-  @@index([projectId])
-  @@index([contractId])
   @@index([createdAt])
-  @@index([action])
 }
