@@ -331,52 +331,55 @@ async function main() {
   // ============================================
   console.log('Creating audit logs...');
 
-  await prisma.auditLog.createMany({
-    data: [
-      {
-        action: AuditAction.CREATE,
-        entityType: 'Project',
-        entityId: project.id,
-        description: 'Proyek "Pembangunan Gedung Kantor PT Maju Bersama" dibuat',
-        userId: owner.id,
-      },
-      {
-        action: AuditAction.CREATE,
-        entityType: 'Contract',
-        entityId: contract.id,
-        description: 'Kontrak KTR-2024-001 dibuat dengan nilai Rp 5.000.000.000',
-        userId: owner.id,
-      },
-      {
-        action: AuditAction.SUBMIT_PROGRESS,
-        entityType: 'Term',
-        entityId: term1.id,
-        description: 'Progres termin 1 diajukan oleh kontraktor',
-        userId: contractor.id,
-      },
-      {
-        action: AuditAction.VERIFY_APPROVE,
-        entityType: 'Verification',
-        entityId: term1.id,
-        description: 'Termin 1 disetujui oleh Pengawas',
-        userId: supervisor.id,
-      },
-      {
-        action: AuditAction.VERIFY_APPROVE,
-        entityType: 'Verification',
-        entityId: term1.id,
-        description: 'Termin 1 disetujui oleh Saksi',
-        userId: witness.id,
-      },
-      {
-        action: AuditAction.PAYMENT_CONFIRM,
-        entityType: 'Payment',
-        entityId: term1.id,
-        description: 'Pembayaran termin 1 dikonfirmasi sebesar Rp 1.500.000.000',
-        userId: owner.id,
-      },
-    ],
-  });
+  // SQLite doesn't support createMany, so create individually
+  const auditLogs = [
+    {
+      action: AuditAction.CREATE,
+      entityType: 'Project',
+      entityId: project.id,
+      description: 'Proyek "Pembangunan Gedung Kantor PT Maju Bersama" dibuat',
+      userId: owner.id,
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: 'Contract',
+      entityId: contract.id,
+      description: 'Kontrak KTR-2024-001 dibuat dengan nilai Rp 5.000.000.000',
+      userId: owner.id,
+    },
+    {
+      action: AuditAction.SUBMIT_PROGRESS,
+      entityType: 'Term',
+      entityId: term1.id,
+      description: 'Progres termin 1 diajukan oleh kontraktor',
+      userId: contractor.id,
+    },
+    {
+      action: AuditAction.VERIFY_APPROVE,
+      entityType: 'Verification',
+      entityId: term1.id,
+      description: 'Termin 1 disetujui oleh Pengawas',
+      userId: supervisor.id,
+    },
+    {
+      action: AuditAction.VERIFY_APPROVE,
+      entityType: 'Verification',
+      entityId: term1.id,
+      description: 'Termin 1 disetujui oleh Saksi',
+      userId: witness.id,
+    },
+    {
+      action: AuditAction.PAYMENT_CONFIRM,
+      entityType: 'Payment',
+      entityId: term1.id,
+      description: 'Pembayaran termin 1 dikonfirmasi sebesar Rp 1.500.000.000',
+      userId: owner.id,
+    },
+  ];
+
+  for (const log of auditLogs) {
+    await prisma.auditLog.create({ data: log });
+  }
 
   console.log('✓ Audit logs created\n');
 
