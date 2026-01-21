@@ -1,6 +1,6 @@
 // AMANTRA Construction MVP 0.1
 // Sistem Kontrak Konstruksi Berbasis Amanah - Minimum Viable Product
-// Fokus: 1 Proyek → 1 Kontrak → Beberapa Termin → Upload Progres → Verifikasi Berlapis → Siap Dibayar
+// SQLite compatible - using String instead of enum
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +13,14 @@ datasource db {
 
 // ============================================
 // USER - 4 ROLE ONLY
+// Roles: OWNER, CONTRACTOR, SUPERVISOR, WITNESS
 // ============================================
-
-enum UserRole {
-  OWNER       // Pemberi Kerja - Buat proyek, lihat status, konfirmasi pembayaran
-  CONTRACTOR  // Kontraktor - Upload progres
-  SUPERVISOR  // Pengawas - Verifikasi progres
-  WITNESS     // Saksi - Verifikasi progres
-}
 
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
   passwordHash  String
-  role          UserRole
+  role          String    // OWNER, CONTRACTOR, SUPERVISOR, WITNESS
   name          String
   phone         String?
   company       String?
@@ -106,17 +100,8 @@ model Contract {
 
 // ============================================
 // TERM (TERMIN)
-// Status flow: DRAFT → SUBMITTED → VERIFIED → VALID → PAID
+// Status: DRAFT, SUBMITTED, VERIFIED, VALID, REJECTED, PAID
 // ============================================
-
-enum TermStatus {
-  DRAFT           // Belum ada progres
-  SUBMITTED       // Progres sudah diajukan, menunggu verifikasi
-  VERIFIED        // Sedang diverifikasi (minimal 1 sudah approve)
-  VALID           // 2 verifikasi disetujui, siap dibayar
-  REJECTED        // Ditolak, perlu revisi
-  PAID            // Sudah dibayar
-}
 
 model Term {
   id              String      @id @default(uuid())
@@ -125,7 +110,7 @@ model Term {
   description     String?
   percentage      Float       // Persentase dari total kontrak (e.g., 30%)
   value           Float       // Nilai termin dalam Rupiah
-  status          TermStatus  @default(DRAFT)
+  status          String      @default("DRAFT") // DRAFT, SUBMITTED, VERIFIED, VALID, REJECTED, PAID
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -168,35 +153,26 @@ model Progress {
 
 // ============================================
 // VERIFICATION - Verifikasi oleh Pengawas & Saksi
+// Role: SUPERVISOR, WITNESS
+// Status: PENDING, APPROVED, REJECTED
 // ============================================
 
-enum VerificationRole {
-  SUPERVISOR  // Pengawas
-  WITNESS     // Saksi
-}
-
-enum VerificationStatus {
-  PENDING   // Belum diverifikasi
-  APPROVED  // Disetujui
-  REJECTED  // Ditolak
-}
-
 model Verification {
-  id              String              @id @default(uuid())
-  role            VerificationRole    // Apakah ini verifikasi pengawas atau saksi
-  status          VerificationStatus  @default(PENDING)
-  notes           String?             // Catatan verifikasi
+  id              String    @id @default(uuid())
+  role            String    // SUPERVISOR, WITNESS
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  notes           String?   // Catatan verifikasi
 
   verifiedAt      DateTime?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
   termId          String
-  term            Term                @relation(fields: [termId], references: [id])
+  term            Term      @relation(fields: [termId], references: [id])
 
   verifierId      String
-  verifier        User                @relation(fields: [verifierId], references: [id])
+  verifier        User      @relation(fields: [verifierId], references: [id])
 
   @@unique([termId, role]) // Satu termin hanya bisa diverifikasi 1x per role
   @@index([termId])
@@ -205,61 +181,46 @@ model Verification {
 
 // ============================================
 // PAYMENT - Status pembayaran per termin
+// Status: PENDING, READY, PAID
 // ============================================
 
-enum PaymentStatus {
-  PENDING     // Menunggu (belum valid)
-  READY       // Siap dibayar (status termin = VALID)
-  PAID        // Sudah dibayar
-}
-
 model Payment {
-  id              String        @id @default(uuid())
-  amount          Float         // Jumlah yang dibayar
-  status          PaymentStatus @default(PENDING)
-  proofUrl        String?       // URL bukti transfer
-  transactionRef  String?       // Nomor referensi transfer
+  id              String    @id @default(uuid())
+  amount          Float     // Jumlah yang dibayar
+  status          String    @default("PENDING") // PENDING, READY, PAID
+  proofUrl        String?   // URL bukti transfer
+  transactionRef  String?   // Nomor referensi transfer
   paidAt          DateTime?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
-  termId          String        @unique
-  term            Term          @relation(fields: [termId], references: [id])
+  termId          String    @unique
+  term            Term      @relation(fields: [termId], references: [id])
 
   @@index([status])
 }
 
 // ============================================
 // AUDIT LOG - Semua aksi tercatat
+// Action: CREATE, UPDATE, DELETE, LOGIN, SUBMIT_PROGRESS, VERIFY_APPROVE, VERIFY_REJECT, PAYMENT_CONFIRM
 // ============================================
 
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  LOGIN
-  SUBMIT_PROGRESS
-  VERIFY_APPROVE
-  VERIFY_REJECT
-  PAYMENT_CONFIRM
-}
-
 model AuditLog {
-  id          String      @id @default(uuid())
-  action      AuditAction
-  entityType  String      // "Project", "Contract", "Term", "Progress", "Verification", "Payment"
+  id          String    @id @default(uuid())
+  action      String    // CREATE, UPDATE, DELETE, LOGIN, SUBMIT_PROGRESS, VERIFY_APPROVE, VERIFY_REJECT, PAYMENT_CONFIRM
+  entityType  String    // "Project", "Contract", "Term", "Progress", "Verification", "Payment"
   entityId    String
   description String
-  oldValue    String?     // JSON
-  newValue    String?     // JSON
+  oldValue    String?   // JSON
+  newValue    String?   // JSON
 
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime  @default(now())
 
   // Who did it
   userId      String
-  user        User        @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([entityType, entityId])
