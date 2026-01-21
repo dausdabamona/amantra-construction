@@ -37,8 +37,9 @@ export class PrismaService
 
     return Promise.all(
       models.map((model) => {
-        if (typeof this[model as string]?.deleteMany === 'function') {
-          return this[model as string].deleteMany();
+        const delegate = (this as any)[model];
+        if (typeof delegate?.deleteMany === 'function') {
+          return delegate.deleteMany();
         }
         return Promise.resolve();
       }),

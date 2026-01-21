@@ -34,7 +34,7 @@ export class ProgressService {
     }
 
     // Can only upload progress if term is DRAFT, SUBMITTED, or REJECTED
-    if (![TermStatus.DRAFT, TermStatus.SUBMITTED, TermStatus.REJECTED].includes(term.status)) {
+    if (!['DRAFT', 'SUBMITTED', 'REJECTED'].includes(term.status)) {
       throw new BadRequestException('Tidak dapat upload progres untuk termin dengan status ini');
     }
 
