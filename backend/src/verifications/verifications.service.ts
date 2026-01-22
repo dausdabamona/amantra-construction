@@ -1,16 +1,20 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TermsService } from '../terms/terms.service';
 import { AuditService } from '../audit/audit.service';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import { JwtPayload } from '../common/jwt-payload.interface';
 import { VerificationRole, VerificationStatus, TermStatus } from '../common/types';
 
 @Injectable()
 export class VerificationsService {
+  private readonly logger = new Logger(VerificationsService.name);
+
   constructor(
     private prisma: PrismaService,
     private termsService: TermsService,
     private auditService: AuditService,
+    private blockchainService: BlockchainService,
   ) {}
 
   async verify(
@@ -81,6 +85,9 @@ export class VerificationsService {
       description: `Termin "${term.name}" ${data.status === 'APPROVED' ? 'disetujui' : 'ditolak'} oleh ${user.role === 'SUPERVISOR' ? 'Pengawas' : 'Saksi'}`,
       userId: user.sub,
     });
+
+    // Record verification on blockchain (non-blocking)
+    this.recordVerificationOnBlockchain(termId, term, verificationRole, data.status === 'APPROVED', data.notes);
 
     // Check if both verifications are done and approved
     await this.checkAndUpdateTermStatus(termId, user.sub);
@@ -179,5 +186,42 @@ export class VerificationsService {
     });
 
     return terms;
+  }
+
+  /**
+   * Record verification on blockchain (non-blocking)
+   */
+  private async recordVerificationOnBlockchain(
+    termId: string,
+    term: any,
+    role: string,
+    approved: boolean,
+    notes?: string,
+  ) {
+    try {
+      // Create term data string for hashing
+      const termData = JSON.stringify({
+        termId,
+        termName: term.name,
+        termNumber: term.termNumber,
+        value: term.value,
+        projectName: term.contract.project.name,
+      });
+
+      const result = await this.blockchainService.recordVerification(
+        termId,
+        termData,
+        role,
+        approved,
+        notes || '',
+      );
+
+      if (result.success) {
+        this.logger.log(`Verification recorded on blockchain: ${result.transactionHash}`);
+      }
+    } catch (error) {
+      // Non-blocking - just log the error
+      this.logger.error(`Failed to record verification on blockchain: ${error.message}`);
+    }
   }
 }

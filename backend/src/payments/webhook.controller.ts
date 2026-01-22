@@ -4,6 +4,7 @@ import { QrisService, WebhookPayload } from './qris.service';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import { PaymentStatus, TermStatus } from '../common/types';
 
 @ApiTags('webhooks')
@@ -16,6 +17,7 @@ export class WebhookController {
     private paymentsService: PaymentsService,
     private prisma: PrismaService,
     private auditService: AuditService,
+    private blockchainService: BlockchainService,
   ) {}
 
   @Post('midtrans')
@@ -109,7 +111,36 @@ export class WebhookController {
       userId: payment.term.contract.project.ownerId,
     });
 
+    // Record payment on blockchain (non-blocking)
+    this.recordPaymentOnBlockchain(payment, payload);
+
     this.logger.log(`Payment confirmed for term ${payment.termId}, transaction: ${payload.transaction_id}`);
+  }
+
+  /**
+   * Record payment confirmation on blockchain (non-blocking)
+   */
+  private async recordPaymentOnBlockchain(payment: any, payload: WebhookPayload) {
+    try {
+      const result = await this.blockchainService.confirmPayment(
+        payment.termId,
+        payment.amount,
+        payload.transaction_id,
+        JSON.stringify({
+          orderId: payload.order_id,
+          paymentType: payload.payment_type,
+          transactionTime: payload.transaction_time,
+          settlementTime: payload.settlement_time,
+        }),
+      );
+
+      if (result.success) {
+        this.logger.log(`Payment recorded on blockchain: ${result.transactionHash}`);
+      }
+    } catch (error) {
+      // Non-blocking - just log the error
+      this.logger.error(`Failed to record payment on blockchain: ${error.message}`);
+    }
   }
 
   private async handlePaymentPending(payment: any, payload: WebhookPayload) {

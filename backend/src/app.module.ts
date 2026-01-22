@@ -10,6 +10,7 @@ import { ProgressModule } from './progress/progress.module';
 import { VerificationsModule } from './verifications/verifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AuditModule } from './audit/audit.module';
+import { BlockchainModule } from './blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AuditModule } from './audit/audit.module';
     VerificationsModule,
     PaymentsModule,
     AuditModule,
+    BlockchainModule,
   ],
 })
 export class AppModule {}

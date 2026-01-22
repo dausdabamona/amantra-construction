@@ -4,6 +4,7 @@ import { VerificationsService } from './verifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TermsService } from '../terms/terms.service';
 import { AuditService } from '../audit/audit.service';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import { JwtPayload } from '../common/jwt-payload.interface';
 import { TermStatus, VerificationRole } from '../common/types';
 
@@ -12,6 +13,7 @@ describe('VerificationsService', () => {
   let prismaService: PrismaService;
   let termsService: TermsService;
   let auditService: AuditService;
+  let blockchainService: BlockchainService;
 
   const mockPrismaService = {
     verification: {
@@ -31,6 +33,11 @@ describe('VerificationsService', () => {
 
   const mockAuditService = {
     log: jest.fn(),
+  };
+
+  const mockBlockchainService = {
+    isEnabled: jest.fn().mockReturnValue(false),
+    recordVerification: jest.fn().mockResolvedValue({ success: false, error: 'Blockchain not enabled' }),
   };
 
   // Mock data
@@ -74,6 +81,7 @@ describe('VerificationsService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: TermsService, useValue: mockTermsService },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: BlockchainService, useValue: mockBlockchainService },
       ],
     }).compile();
 
@@ -81,6 +89,7 @@ describe('VerificationsService', () => {
     prismaService = module.get<PrismaService>(PrismaService);
     termsService = module.get<TermsService>(TermsService);
     auditService = module.get<AuditService>(AuditService);
+    blockchainService = module.get<BlockchainService>(BlockchainService);
 
     // Reset all mocks
     jest.clearAllMocks();
@@ -275,6 +284,7 @@ describe('VerificationsService', () => {
           { provide: PrismaService, useValue: { ...mockPrismaService, term: { findMany: jest.fn().mockResolvedValue(mockPendingTerms) } } },
           { provide: TermsService, useValue: mockTermsService },
           { provide: AuditService, useValue: mockAuditService },
+          { provide: BlockchainService, useValue: mockBlockchainService },
         ],
       }).compile();
 
