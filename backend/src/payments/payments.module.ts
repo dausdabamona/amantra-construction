@@ -5,6 +5,8 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
+import { WebhookController } from './webhook.controller';
+import { QrisService } from './qris.service';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -21,8 +23,8 @@ import { AuditModule } from '../audit/audit.module';
     }),
     AuditModule,
   ],
-  controllers: [PaymentsController],
-  providers: [PaymentsService],
-  exports: [PaymentsService],
+  controllers: [PaymentsController, WebhookController],
+  providers: [PaymentsService, QrisService],
+  exports: [PaymentsService, QrisService],
 })
 export class PaymentsModule {}
