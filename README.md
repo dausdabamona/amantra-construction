@@ -38,12 +38,10 @@ amantra-construction/
 
 | Role | Bahasa Indonesia | Description |
 |------|------------------|-------------|
-| OWNER | Pemberi Kerja | Project owner, initiates contracts |
-| CONTRACTOR | Kontraktor | Executes construction work |
+| OWNER | Pemberi Kerja | Project owner, initiates contracts and confirms payments |
+| CONTRACTOR | Kontraktor | Executes construction work and uploads progress |
 | SUPERVISOR | Pengawas | Verifies work progress |
 | WITNESS | Saksi Ahli | Technical expert verification |
-| ADMIN | Admin Sistem | System administration |
-| AUDITOR | Auditor | Audit and compliance review |
 
 ## Business Flow
 
