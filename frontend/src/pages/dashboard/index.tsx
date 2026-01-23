@@ -1,224 +1,287 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import Layout from '@/components/Layout';
-import { api, getUser } from '@/lib/api';
+import { useRouter } from 'next/router';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRequireAuth, useCurrency, useFormatDate } from '@/hooks/useCustom';
+import { projectService, paymentService } from '@/services/api';
 
-interface Project {
-  id: string;
-  name: string;
-  location: string;
-  contract?: {
-    contractNumber: string;
-    totalValue: number;
-    terms: Array<{
-      id: string;
-      termNumber: number;
-      name: string;
-      status: string;
-      value: number;
-    }>;
-  };
-}
-
-interface Stats {
+interface DashboardStats {
   totalProjects: number;
   totalValue: number;
   pendingVerifications: number;
   readyPayments: number;
 }
 
-const statusColors: Record<string, string> = {
-  DRAFT: 'bg-gray-100 text-gray-800',
-  SUBMITTED: 'bg-blue-100 text-blue-800',
-  VERIFIED: 'bg-yellow-100 text-yellow-800',
-  VALID: 'bg-green-100 text-green-800',
-  REJECTED: 'bg-red-100 text-red-800',
-  PAID: 'bg-emerald-100 text-emerald-800',
-};
-
-const statusLabels: Record<string, string> = {
-  DRAFT: 'Draft',
-  SUBMITTED: 'Diajukan',
-  VERIFIED: 'Diverifikasi',
-  VALID: 'Valid',
-  REJECTED: 'Ditolak',
-  PAID: 'Terbayar',
-};
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 export default function Dashboard() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [stats, setStats] = useState<Stats>({ totalProjects: 0, totalValue: 0, pendingVerifications: 0, readyPayments: 0 });
-  const [loading, setLoading] = useState(true);
-  const user = getUser();
+  const { user } = useAuth();
+  const { isLoading: authLoading } = useRequireAuth();
+  const { formatCurrency } = useCurrency();
+
+  const [stats, setStats] = useState<DashboardStats>({
+    totalProjects: 0,
+    totalValue: 0,
+    pendingVerifications: 0,
+    readyPayments: 0,
+  });
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!authLoading && user) {
+      loadDashboardData();
+    }
+  }, [user, authLoading]);
 
-  async function loadData() {
+  const loadDashboardData = async () => {
     try {
-      const projectsData = await api<Project[]>('/projects');
-      setProjects(projectsData);
+      setIsLoading(true);
+
+      // Load projects
+      const projectsData = await projectService.getProjects(1, 5);
+      const projects = projectsData.data || projectsData;
+      setRecentProjects(projects.slice(0, 5));
 
       // Calculate stats
       let totalValue = 0;
-      let pendingVerifications = 0;
-      let readyPayments = 0;
+      let pendingCount = 0;
+      let readyPaymentsCount = 0;
 
-      projectsData.forEach(project => {
+      projects.forEach((project: any) => {
         if (project.contract) {
-          totalValue += project.contract.totalValue;
-          project.contract.terms?.forEach(term => {
-            if (term.status === 'SUBMITTED') pendingVerifications++;
-            if (term.status === 'VALID') readyPayments++;
+          totalValue += project.contract.totalValue || 0;
+          project.contract.terms?.forEach((term: any) => {
+            if (term.status === 'SUBMITTED') pendingCount++;
+            if (term.status === 'VALID') readyPaymentsCount++;
           });
         }
       });
 
+      // Load ready payments for Owner
+      if (user?.role === 'OWNER') {
+        try {
+          const paymentsData = await paymentService.getReadyPayments();
+          readyPaymentsCount = (paymentsData.data || paymentsData).length;
+        } catch (error) {
+          console.error('Failed to load payments:', error);
+        }
+      }
+
       setStats({
-        totalProjects: projectsData.length,
+        totalProjects: projects.length,
         totalValue,
-        pendingVerifications,
-        readyPayments,
+        pendingVerifications: pendingCount,
+        readyPayments: readyPaymentsCount,
       });
     } catch (error) {
-      console.error('Failed to load data:', error);
+      console.error('Failed to load dashboard data:', error);
+      toast.error('Gagal memuat data dashboard');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Memuat dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
-        <title>Dashboard | AMANTRA</title>
+        <title>Dashboard - AMANTRA Construction</title>
       </Head>
 
-      <div className="space-y-6">
-        {/* Welcome */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Selamat datang, {user?.name}
-          </h1>
-          <p className="text-gray-600">Berikut adalah ringkasan proyek Anda</p>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4">
-            <p className="text-sm text-gray-500">Total Proyek</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.totalProjects}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-sm text-gray-500">Total Nilai Kontrak</p>
-            <p className="text-lg font-bold text-gray-900">{formatCurrency(stats.totalValue)}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-sm text-gray-500">Menunggu Verifikasi</p>
-            <p className="text-2xl font-bold text-yellow-600">{stats.pendingVerifications}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-sm text-gray-500">Siap Bayar</p>
-            <p className="text-2xl font-bold text-green-600">{stats.readyPayments}</p>
+      <div className="min-h-screen bg-gray-100">
+        {/* Header */}
+        <div className="bg-white shadow">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+                <p className="text-gray-600 mt-1">Selamat datang, {user?.name}!</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Role: <span className="font-semibold text-gray-900">{getRoleLabel(user?.role)}</span></p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Projects List */}
-        <div className="card">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Proyek Anda</h2>
-              <Link href="/projects" className="text-sm text-primary-600 hover:text-primary-500">
-                Lihat semua
-              </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Total Projects */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="text-3xl font-bold text-blue-600">{stats.totalProjects}</div>
+                <div className="ml-4">
+                  <p className="text-sm text-gray-500">Total Proyek</p>
+                  <p className="text-xs text-gray-400">Semua proyek</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Value */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex flex-col">
+                <p className="text-sm text-gray-500 mb-2">Total Nilai Kontrak</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalValue)}</p>
+              </div>
+            </div>
+
+            {/* Pending Verifications */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="text-3xl font-bold text-yellow-600">{stats.pendingVerifications}</div>
+                <div className="ml-4">
+                  <p className="text-sm text-gray-500">Verifikasi Pending</p>
+                  <p className="text-xs text-gray-400">Menunggu approval</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Ready Payments */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="text-3xl font-bold text-emerald-600">{stats.readyPayments}</div>
+                <div className="ml-4">
+                  <p className="text-sm text-gray-500">Siap Bayar</p>
+                  <p className="text-xs text-gray-400">Pembayaran tersedia</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+          {/* Action Buttons by Role */}
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Aksi Cepat</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {user?.role === 'OWNER' && (
+                <>
+                  <Link href="/projects/create" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center transition-colors">
+                    ➕ Buat Proyek
+                  </Link>
+                  <Link href="/projects" className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-center transition-colors">
+                    📋 Lihat Proyek
+                  </Link>
+                  <Link href="/payments" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-center transition-colors">
+                    💳 Pembayaran
+                  </Link>
+                  <Link href="/audit" className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-center transition-colors">
+                    📊 Audit Log
+                  </Link>
+                </>
+              )}
+
+              {user?.role === 'CONTRACTOR' && (
+                <>
+                  <Link href="/projects" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center transition-colors">
+                    📋 Proyek Saya
+                  </Link>
+                  <Link href="/projects/create" className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-center transition-colors">
+                    ➕ Buat Proyek
+                  </Link>
+                  <Link href="/payments" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-center transition-colors">
+                    💳 Pembayaran
+                  </Link>
+                  <Link href="/audit" className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-center transition-colors">
+                    📊 Audit Log
+                  </Link>
+                </>
+              )}
+
+              {user?.role === 'SUPERVISOR' && (
+                <>
+                  <Link href="/verifications" className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-center transition-colors">
+                    ✅ Verifikasi
+                  </Link>
+                  <Link href="/projects" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center transition-colors">
+                    📋 Proyek
+                  </Link>
+                  <Link href="/audit" className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-center transition-colors">
+                    📊 Audit Log
+                  </Link>
+                </>
+              )}
+
+              {user?.role === 'WITNESS' && (
+                <>
+                  <Link href="/verifications" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-center transition-colors">
+                    ✅ Verifikasi Final
+                  </Link>
+                  <Link href="/projects" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-center transition-colors">
+                    📋 Proyek
+                  </Link>
+                  <Link href="/audit" className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-center transition-colors">
+                    📊 Audit Log
+                  </Link>
+                </>
+              )}
             </div>
-          ) : projects.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              Belum ada proyek
+          </div>
+
+          {/* Recent Projects */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Proyek Terbaru</h2>
             </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="block hover:bg-gray-50"
-                >
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-primary-600 truncate">
-                          {project.name}
-                        </p>
-                        <p className="text-sm text-gray-500">{project.location}</p>
-                        {project.contract && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            {project.contract.contractNumber} • {formatCurrency(project.contract.totalValue)}
-                          </p>
-                        )}
-                      </div>
-                      <div className="ml-4 flex-shrink-0">
-                        {project.contract?.terms && (
-                          <div className="flex flex-wrap gap-1 justify-end">
-                            {project.contract.terms.slice(0, 3).map((term) => (
-                              <span
-                                key={term.id}
-                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[term.status]}`}
-                              >
-                                T{term.termNumber}: {statusLabels[term.status]}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Nama Proyek</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Lokasi</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Nilai</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {recentProjects.map((project: any) => (
+                    <tr key={project.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">{project.name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{project.location}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {formatCurrency(project.contract?.totalValue || 0)}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                          Aktif
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <Link href={`/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
+                          Lihat Detail
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Quick Actions based on role */}
-        {user?.role === 'SUPERVISOR' || user?.role === 'WITNESS' ? (
-          <div className="card p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Tindakan Cepat</h3>
-            <Link
-              href="/projects"
-              className="btn-primary text-sm"
-            >
-              Verifikasi Termin Pending
-            </Link>
-          </div>
-        ) : null}
-
-        {user?.role === 'OWNER' && stats.readyPayments > 0 ? (
-          <div className="card p-4 bg-green-50 border border-green-200">
-            <h3 className="text-sm font-medium text-green-800 mb-2">
-              Ada {stats.readyPayments} termin siap dibayar
-            </h3>
-            <Link href="/payments" className="btn-success text-sm">
-              Lihat Pembayaran
-            </Link>
-          </div>
-        ) : null}
       </div>
-    </Layout>
+    </>
   );
 }
+
+function getRoleLabel(role?: string) {
+  const labels: Record<string, string> = {
+    OWNER: 'Pemberi Kerja',
+    CONTRACTOR: 'Kontraktor',
+    SUPERVISOR: 'Pengawas',
+    WITNESS: 'Saksi Ahli',
+  };
+  return labels[role || ''] || 'User';
+}
+
+

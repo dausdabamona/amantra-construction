@@ -12,12 +12,8 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
-  // Internationalization
-  i18n: {
-    locales: ['id', 'en'],
-    defaultLocale: 'id',
-    localeDetection: true,
-  },
+  // Note: i18n routing is now handled in Next.js 14 using App Router
+  // Configure in middleware.ts if needed
 };
 
 module.exports = withPWA(nextConfig);

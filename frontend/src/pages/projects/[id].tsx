@@ -1,55 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { api, getUser } from '@/lib/api';
 import toast from 'react-hot-toast';
-
-interface Verification {
-  id: string;
-  role: 'SUPERVISOR' | 'WITNESS';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  notes?: string;
-  verifiedAt?: string;
-  verifier: { name: string };
-}
-
-interface Progress {
-  id: string;
-  description: string;
-  photoUrl?: string;
-  claimPercentage: number;
-  createdAt: string;
-  uploadedBy: { name: string };
-}
-
-interface Payment {
-  id: string;
-  amount: number;
-  status: 'PENDING' | 'READY' | 'PAID';
-  proofUrl?: string;
-  transactionRef?: string;
-  paidAt?: string;
-}
-
-interface Term {
-  id: string;
-  termNumber: number;
-  name: string;
-  description?: string;
-  percentage: number;
-  value: number;
-  status: string;
-  progress: Progress[];
-  verifications: Verification[];
-  payment?: Payment;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { projectService, verificationService, paymentService } from '@/services/api';
+import { useRequireAuth, useCurrency } from '@/hooks/useCustom';
 
 interface Project {
   id: string;
   name: string;
   description?: string;
   location: string;
+  status: string;
+  budget: number;
+  contractId?: string;
   owner: { id: string; name: string };
   contractor: { id: string; name: string };
   supervisor: { id: string; name: string };
@@ -58,8 +22,53 @@ interface Project {
     id: string;
     contractNumber: string;
     totalValue: number;
-    termCount: number;
-    terms: Term[];
+    termCount?: number;
+    terms?: Term[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Term {
+  id: string;
+  termNumber: number;
+  name: string;
+  description: string;
+  status: string;
+  amount: number;
+  percentage: number;
+  value: number;
+  createdAt: string;
+  updatedAt: string;
+  progress: Array<{
+    id: string;
+    description: string;
+    photoUrl?: string;
+    claimPercentage: number;
+    createdAt: string;
+    uploadedBy?: {
+      id: string;
+      name: string;
+    };
+  }>;
+  verifications: Array<{
+    id: string;
+    role: 'SUPERVISOR' | 'WITNESS';
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    notes?: string;
+    verifier?: {
+      id: string;
+      name: string;
+    };
+  }>;
+  payment?: {
+    id: string;
+    status: string;
+    amount: number;
+    transactionRef?: string;
+    proofUrl?: string;
+    confirmedAt?: string;
+    paidAt?: string;
   };
 }
 
@@ -107,7 +116,9 @@ function formatDate(date: string) {
 export default function ProjectDetailPage() {
   const router = useRouter();
   const { id } = router.query;
-  const user = getUser();
+  const { user } = useAuth();
+  const { isLoading: authLoading } = useRequireAuth();
+  const { formatCurrency: formatCurrencyHook } = useCurrency();
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +133,7 @@ export default function ProjectDetailPage() {
 
   async function loadProject() {
     try {
-      const data = await api<Project>(`/projects/${id}`);
+      const data = await projectService.getProjectById(id as string);
       setProject(data);
       if (data.contract?.terms && data.contract.terms.length > 0) {
         setSelectedTerm(data.contract.terms[0]);
@@ -138,9 +149,9 @@ export default function ProjectDetailPage() {
   async function handleVerification(termId: string, status: 'APPROVED' | 'REJECTED', notes: string) {
     setSubmitting(true);
     try {
-      await api(`/verifications/term/${termId}`, {
-        method: 'POST',
-        body: { status, notes },
+      await verificationService.createVerification(termId, {
+        status,
+        notes,
       });
       toast.success(status === 'APPROVED' ? 'Berhasil disetujui' : 'Berhasil ditolak');
       setVerifyModal(null);
@@ -156,11 +167,8 @@ export default function ProjectDetailPage() {
   async function handlePayment(termId: string) {
     setSubmitting(true);
     try {
-      await api(`/payments/term/${termId}/confirm`, {
-        method: 'POST',
-        body: {
-          transactionRef: `TRF-${Date.now()}`,
-        },
+      await paymentService.confirmPayment(termId, {
+        transactionRef: `TRF-${Date.now()}`,
       });
       toast.success('Pembayaran dikonfirmasi');
       loadProject();
@@ -191,47 +199,49 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Memuat proyek...</p>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (!project) {
     return (
-      <Layout>
+      <>
         <div className="text-center py-12">
           <p className="text-gray-500">Proyek tidak ditemukan</p>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>{project.name} | AMANTRA</title>
       </Head>
 
-      <div className="space-y-6">
-        {/* Project Header */}
-        <div className="card p-6">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-              <p className="text-gray-500 mt-1">{project.location}</p>
-              {project.description && (
-                <p className="text-gray-600 mt-2">{project.description}</p>
-              )}
-            </div>
-            {project.contract && (
-              <div className="mt-4 lg:mt-0 lg:text-right">
-                <p className="text-sm text-gray-500">{project.contract.contractNumber}</p>
-                <p className="text-2xl font-bold text-primary-600">
-                  {formatCurrency(project.contract.totalValue)}
-                </p>
+      <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Project Header */}
+          <div className="card p-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+                <p className="text-gray-500 mt-1">{project.location}</p>
+                {project.description && (
+                  <p className="text-gray-600 mt-2">{project.description}</p>
+                )}
+              </div>
+              {project.contract && (
+                <div className="mt-4 lg:mt-0 lg:text-right">
+                  <p className="text-sm text-gray-500">{project.contract.contractNumber}</p>
+                  <p className="text-2xl font-bold text-primary-600">
+                    {formatCurrency(project.contract.totalValue)}
+                  </p>
                 <p className="text-sm text-gray-500">{project.contract.termCount} termin</p>
               </div>
             )}
@@ -379,7 +389,7 @@ export default function ProjectDetailPage() {
                             <div>
                               <p className="text-sm text-gray-900">{p.description}</p>
                               <p className="text-xs text-gray-500 mt-1">
-                                {p.uploadedBy.name} • {formatDate(p.createdAt)}
+                                {p.uploadedBy?.name || 'Tidak diketahui'} • {formatDate(p.createdAt)}
                               </p>
                             </div>
                             <span className="badge-info">{p.claimPercentage}%</span>
@@ -589,6 +599,7 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       )}
-    </Layout>
+      </div>
+    </>
   );
 }
