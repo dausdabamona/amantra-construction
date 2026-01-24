@@ -2,6 +2,37 @@
 
 Sistem manajemen kontrak konstruksi berbasis termin dengan verifikasi berlapis.
 
+## 🚀 Cara Menjalankan Aplikasi
+
+**📖 [Panduan Lengkap: CARA-MENJALANKAN.md](./CARA-MENJALANKAN.md)**
+
+Panduan lengkap dalam Bahasa Indonesia yang mencakup:
+- Persiapan awal dan instalasi
+- Setup backend dan frontend
+- Cara menjalankan aplikasi
+- Akun demo untuk testing
+- Troubleshooting lengkap
+
+**Quick Start:**
+```bash
+# Backend
+cd backend
+npm install
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+npm run start:dev
+
+# Frontend (terminal baru)
+cd frontend
+npm install
+npm run dev
+```
+
+Akses: http://localhost:3000 (Frontend) | http://localhost:3001/docs (API Docs)
+
+---
+
 ## Overview
 
 AMANTRA (Amanah Manajemen Transaksi) adalah platform B2B untuk industri konstruksi yang menyediakan:
@@ -63,31 +94,21 @@ amantra-construction/
 All activities → Audit Log
 ```
 
-## Quick Start
+## Demo Accounts
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
+Aplikasi sudah dilengkapi dengan 4 akun demo:
 
-### Development
-
-```bash
-# Backend
-cd backend
-npm install
-npm run db:migrate
-npm run db:seed
-npm run start:dev
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
+| Role | Email | Password | Fungsi |
+|------|-------|----------|--------|
+| Owner | owner@amantra.id | Password123! | Membuat proyek, kontrak, verifikasi pembayaran |
+| Contractor | kontraktor@amantra.id | Password123! | Upload progress, submit verifikasi |
+| Supervisor | pengawas@amantra.id | Password123! | Verifikasi progress (approval pertama) |
+| Witness | saksi@amantra.id | Password123! | Verifikasi teknis (approval kedua) |
 
 ## Environment Variables
 
-See `.env.example` files in each directory for required configuration.
+Backend: Copy `backend/.env.example` to `backend/.env` (sudah siap pakai untuk development)  
+Frontend: Otomatis menggunakan `http://localhost:3001/api/v1` (tidak perlu konfigurasi)
 
 ## Migration to Supabase
 
