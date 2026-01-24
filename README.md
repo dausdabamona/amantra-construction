@@ -4,18 +4,16 @@ Sistem manajemen kontrak konstruksi berbasis termin dengan verifikasi berlapis.
 
 ## 🚀 Cara Menjalankan Aplikasi
 
-**📖 [Panduan Lengkap: CARA-MENJALANKAN.md](./CARA-MENJALANKAN.md)**
+### 📚 Dokumentasi Lengkap (Bahasa Indonesia)
 
-Panduan lengkap dalam Bahasa Indonesia yang mencakup:
-- Persiapan awal dan instalasi
-- Setup backend dan frontend
-- Cara menjalankan aplikasi
-- Akun demo untuk testing
-- Troubleshooting lengkap
+1. **[📖 CARA-MENJALANKAN.md](./CARA-MENJALANKAN.md)** - Panduan lengkap dari instalasi hingga troubleshooting
+2. **[✅ SETUP-CHECKLIST-INDONESIA.md](./SETUP-CHECKLIST-INDONESIA.md)** - Checklist setup step-by-step
+3. **[📌 QUICK-REFERENCE.md](./QUICK-REFERENCE.md)** - Referensi cepat perintah dan troubleshooting
 
-**Quick Start:**
+### Quick Start
+
 ```bash
-# Backend
+# Backend (Terminal 1)
 cd backend
 npm install
 npm run db:generate
@@ -23,13 +21,17 @@ npm run db:migrate
 npm run db:seed
 npm run start:dev
 
-# Frontend (terminal baru)
+# Frontend (Terminal 2)
 cd frontend
 npm install
 npm run dev
 ```
 
-Akses: http://localhost:3000 (Frontend) | http://localhost:3001/docs (API Docs)
+**Akses:**
+- Frontend: http://localhost:3000
+- API Docs: http://localhost:3001/docs
+
+**Login Demo:** owner@amantra.id / Password123!
 
 ---
 
