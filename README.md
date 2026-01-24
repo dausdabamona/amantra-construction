@@ -4,11 +4,14 @@ Sistem manajemen kontrak konstruksi berbasis termin dengan verifikasi berlapis.
 
 ## 🚀 Cara Menjalankan Aplikasi
 
+> **⚠️ Mendapat Error 404?** Lihat [TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)
+
 ### 📚 Dokumentasi Lengkap (Bahasa Indonesia)
 
 1. **[📖 CARA-MENJALANKAN.md](./CARA-MENJALANKAN.md)** - Panduan lengkap dari instalasi hingga troubleshooting
 2. **[✅ SETUP-CHECKLIST-INDONESIA.md](./SETUP-CHECKLIST-INDONESIA.md)** - Checklist setup step-by-step
 3. **[📌 QUICK-REFERENCE.md](./QUICK-REFERENCE.md)** - Referensi cepat perintah dan troubleshooting
+4. **[🔧 TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)** - Solusi error 404 dan masalah umum
 
 ### Quick Start
 

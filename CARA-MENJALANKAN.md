@@ -2,6 +2,17 @@
 
 Panduan ini akan membantu Anda menjalankan aplikasi AMANTRA Construction dari awal hingga aplikasi berjalan dengan sempurna.
 
+> **⚠️ PENTING: Mendapat Error 404?**
+> 
+> Jika Anda mendapat error 404, kemungkinan besar server belum berjalan atau belum di-setup.
+> **Lihat panduan troubleshooting:** [TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)
+>
+> **Pastikan Anda:**
+> 1. Sudah menjalankan `npm install` di backend DAN frontend
+> 2. Sudah setup database dengan `npm run db:push` dan `npm run db:seed`
+> 3. Menjalankan KEDUA server (backend DAN frontend) di 2 terminal berbeda
+> 4. Menunggu hingga kedua server benar-benar siap sebelum akses browser
+
 ## 📋 Daftar Isi
 
 1. [Persiapan Awal](#persiapan-awal)
@@ -382,6 +393,43 @@ npm run db:seed
    CORS_CREDENTIALS=true
    ```
 3. Restart kedua aplikasi (backend dan frontend)
+
+### ❌ Error 404 - Halaman Tidak Ditemukan
+
+**Problem:** Mendapat error 404 saat akses http://localhost:3000
+
+**Penyebab Umum:**
+- Server frontend/backend belum dijalankan
+- Dependencies belum terinstall
+- Database belum di-setup
+
+**Solusi Lengkap:**
+Lihat panduan khusus di **[TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)** untuk solusi detail.
+
+**Quick Fix:**
+```bash
+# 1. Setup backend
+cd backend
+npm install
+npm run db:generate
+npm run db:push
+npm run db:seed
+
+# 2. Setup frontend
+cd ../frontend
+npm install
+
+# 3. Jalankan backend (terminal 1)
+cd ../backend
+npm run start:dev
+
+# 4. Jalankan frontend (terminal 2 - BUKA TERMINAL BARU!)
+cd frontend
+npm run dev
+
+# 5. Tunggu hingga KEDUA server siap, lalu buka:
+# http://localhost:3000
+```
 
 ---
 
