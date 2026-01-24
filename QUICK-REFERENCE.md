@@ -11,7 +11,7 @@ Panduan cepat untuk menjalankan dan troubleshooting aplikasi AMANTRA.
 cd backend
 npm install              # Install dependencies (pertama kali saja)
 npm run db:generate      # Generate Prisma client (pertama kali saja)
-npm run db:migrate       # Setup database (pertama kali saja)
+npm run db:push          # Setup database (pertama kali saja)
 npm run db:seed          # Isi data demo (pertama kali saja)
 npm run start:dev        # Jalankan backend
 ```
@@ -66,7 +66,10 @@ lsof -ti:3001 | xargs kill -9
 
 ```bash
 cd backend
-npm run db:reset      # Reset database
+rm -f prisma/dev.db*  # Hapus database (Linux/Mac)
+del prisma\dev.db*    # Hapus database (Windows)
+npm run db:push       # Buat database baru
+npm run db:seed       # Isi data demo
 ```
 
 ### ❌ Backend tidak jalan
@@ -75,8 +78,7 @@ npm run db:reset      # Reset database
 cd backend
 npm install
 npm run db:generate
-npm run build
-npm run start:dev
+npm run start:dev  # Tidak perlu build untuk dev mode
 ```
 
 ### ❌ Frontend tidak jalan
@@ -97,8 +99,8 @@ npm run dev
 amantra-construction/
 ├── backend/
 │   ├── .env              ← Konfigurasi backend (copy dari .env.example)
-│   ├── dev.db            ← Database SQLite (auto-created)
 │   ├── prisma/
+│   │   ├── dev.db        ← Database SQLite (auto-created di sini!)
 │   │   ├── schema.prisma ← Skema database
 │   │   └── seed.ts       ← Data demo
 │   └── src/
@@ -214,8 +216,9 @@ npm run db:studio
 ### Reset Database (kehilangan semua data!)
 ```bash
 cd backend
-rm dev.db
-npm run db:migrate
+rm -f prisma/dev.db*    # Linux/Mac
+del prisma\dev.db*      # Windows
+npm run db:push
 npm run db:seed
 ```
 

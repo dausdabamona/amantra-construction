@@ -48,13 +48,20 @@ npm run db:generate
 - [ ] Prisma client berhasil di-generate
 - [ ] Muncul pesan "Generated Prisma Client"
 
-### 5. Migrate Database
+### 5. Setup Database
 ```bash
-npm run db:migrate
+npm run db:push
 ```
-- [ ] Ketika diminta nama migrasi, tekan Enter
-- [ ] Muncul pesan migrasi berhasil
-- [ ] File `dev.db` muncul di folder backend
+- [ ] Database berhasil dibuat
+- [ ] Muncul pesan "Your database is now in sync with your Prisma schema"
+- [ ] File `dev.db` muncul di folder `backend/prisma/`
+
+**Catatan:** Jika ada error, hapus database lama:
+```bash
+rm -f prisma/dev.db*  # Linux/Mac
+del prisma\dev.db*    # Windows
+```
+Lalu coba lagi `npm run db:push`
 
 ### 6. Seed Data Demo
 ```bash
@@ -62,21 +69,15 @@ npm run db:seed
 ```
 - [ ] Data berhasil di-seed
 - [ ] Muncul pesan sukses membuat users, projects, dll
+- [ ] Muncul tabel akun demo
 
-### 7. Build Backend
-```bash
-npm run build
-```
-- [ ] Build berhasil tanpa error
-- [ ] Folder `dist/` muncul
-
-### 8. Jalankan Backend
+### 7. Jalankan Backend
 ```bash
 npm run start:dev
 ```
 - [ ] Backend berjalan di http://localhost:3001
 - [ ] Muncul pesan "Nest application successfully started"
-- [ ] Swagger docs tersedia di http://localhost:3001/docs
+- [ ] Tidak ada error merah (peringatan boleh diabaikan)
 - [ ] ✨ **JANGAN TUTUP TERMINAL INI!**
 
 ---
@@ -183,7 +184,10 @@ lsof -ti:3000 | xargs kill -9
 ### Database error
 ```bash
 cd backend
-npm run db:reset
+rm -f prisma/dev.db*    # Linux/Mac
+del prisma\dev.db*      # Windows
+npm run db:push
+npm run db:seed
 ```
 
 ---

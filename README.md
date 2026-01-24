@@ -17,7 +17,7 @@ Sistem manajemen kontrak konstruksi berbasis termin dengan verifikasi berlapis.
 cd backend
 npm install
 npm run db:generate
-npm run db:migrate
+npm run db:push
 npm run db:seed
 npm run start:dev
 

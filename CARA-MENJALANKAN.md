@@ -82,13 +82,20 @@ AMANTRA menggunakan SQLite untuk development (database tersimpan dalam file loka
 npm run db:generate
 ```
 
-#### b. Jalankan Migrasi Database
+#### b. Setup Database
 
 ```bash
-npm run db:migrate
+# Bersihkan database lama jika ada (opsional, hanya jika ada masalah)
+rm -f prisma/dev.db*  # Linux/Mac
+del prisma\dev.db*    # Windows
+
+# Buat database baru
+npm run db:push
 ```
 
-Ketika diminta nama migrasi, tekan **Enter** saja (akan menggunakan nama default).
+Perintah ini akan membuat database dan tabel-tabel yang diperlukan.
+
+**Catatan:** Jika muncul error, hapus file database lama dengan perintah di atas, lalu coba lagi.
 
 #### c. Isi Database dengan Data Contoh
 
@@ -98,17 +105,26 @@ npm run db:seed
 
 Perintah ini akan membuat:
 - 4 user dengan role berbeda (Owner, Contractor, Supervisor, Witness)
-- 2 proyek contoh
+- 2 proyek contoh  
 - Kontrak dan termin
 - Data progress dan verifikasi
 
-### Langkah 5: Build Backend
+### Langkah 5: Jalankan Backend
 
 ```bash
-npm run build
+npm run start:dev
 ```
 
-Tunggu hingga proses build selesai (sekitar 30-60 detik).
+**Tunggu hingga muncul pesan:**
+```
+[Nest] Nest application successfully started
+```
+
+✅ Backend siap! Backend akan berjalan di http://localhost:3001
+
+**Catatan:** Jika ada error TypeScript terkait file `.spec.ts`, abaikan saja. Aplikasi tetap akan berjalan karena menggunakan mode development.
+
+**JANGAN tutup terminal ini!** Backend harus tetap berjalan.
 
 ---
 
@@ -334,13 +350,14 @@ lsof -ti:3001 | xargs kill -9
 ```bash
 cd backend
 
-# Reset database (HATI-HATI: Akan menghapus semua data!)
-npm run db:reset
+# Hapus database lama
+rm -f prisma/dev.db*  # Linux/Mac
+del prisma\dev.db*    # Windows (Command Prompt)
+Remove-Item prisma\dev.db* -Force  # Windows (PowerShell)
 
-# Atau manual:
-rm dev.db           # Hapus database lama
-npm run db:migrate  # Buat database baru
-npm run db:seed     # Isi dengan data contoh
+# Buat database baru dan isi data
+npm run db:push
+npm run db:seed
 ```
 
 ### ❌ Login tidak berhasil
