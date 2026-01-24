@@ -2,6 +2,42 @@
 
 Sistem manajemen kontrak konstruksi berbasis termin dengan verifikasi berlapis.
 
+## 🚀 Cara Menjalankan Aplikasi
+
+> **⚠️ Mendapat Error 404?** Lihat [TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)
+
+### 📚 Dokumentasi Lengkap (Bahasa Indonesia)
+
+1. **[📖 CARA-MENJALANKAN.md](./CARA-MENJALANKAN.md)** - Panduan lengkap dari instalasi hingga troubleshooting
+2. **[✅ SETUP-CHECKLIST-INDONESIA.md](./SETUP-CHECKLIST-INDONESIA.md)** - Checklist setup step-by-step
+3. **[📌 QUICK-REFERENCE.md](./QUICK-REFERENCE.md)** - Referensi cepat perintah dan troubleshooting
+4. **[🔧 TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md)** - Solusi error 404 dan masalah umum
+
+### Quick Start
+
+```bash
+# Backend (Terminal 1)
+cd backend
+npm install
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run start:dev
+
+# Frontend (Terminal 2)
+cd frontend
+npm install
+npm run dev
+```
+
+**Akses:**
+- Frontend: http://localhost:3000
+- API Docs: http://localhost:3001/docs
+
+**Login Demo:** owner@amantra.id / Password123!
+
+---
+
 ## Overview
 
 AMANTRA (Amanah Manajemen Transaksi) adalah platform B2B untuk industri konstruksi yang menyediakan:
@@ -63,31 +99,21 @@ amantra-construction/
 All activities → Audit Log
 ```
 
-## Quick Start
+## Demo Accounts
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
+Aplikasi sudah dilengkapi dengan 4 akun demo:
 
-### Development
-
-```bash
-# Backend
-cd backend
-npm install
-npm run db:migrate
-npm run db:seed
-npm run start:dev
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
+| Role | Email | Password | Fungsi |
+|------|-------|----------|--------|
+| Owner | owner@amantra.id | Password123! | Membuat proyek, kontrak, verifikasi pembayaran |
+| Contractor | kontraktor@amantra.id | Password123! | Upload progress, submit verifikasi |
+| Supervisor | pengawas@amantra.id | Password123! | Verifikasi progress (approval pertama) |
+| Witness | saksi@amantra.id | Password123! | Verifikasi teknis (approval kedua) |
 
 ## Environment Variables
 
-See `.env.example` files in each directory for required configuration.
+Backend: Copy `backend/.env.example` to `backend/.env` (sudah siap pakai untuk development)  
+Frontend: Otomatis menggunakan `http://localhost:3001/api/v1` (tidak perlu konfigurasi)
 
 ## Migration to Supabase
 
