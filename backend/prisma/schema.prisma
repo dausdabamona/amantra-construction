@@ -29,13 +29,14 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  ownedProjects   Project[]         @relation("ProjectOwner")
-  contractedProjects Project[]      @relation("ProjectContractor")
-  supervisedProjects Project[]      @relation("ProjectSupervisor")
-  witnessedProjects  Project[]      @relation("ProjectWitness")
+  ownedProjects      Project[]         @relation("ProjectOwner")
+  contractedProjects Project[]         @relation("ProjectContractor")
+  supervisedProjects Project[]         @relation("ProjectSupervisor")
+  witnessedProjects  Project[]         @relation("ProjectWitness")
   progressReports    Progress[]
   verifications      Verification[]
   auditLogs          AuditLog[]
+  auditTrailRecords  AuditTrail[]
 
   @@index([email])
   @@index([role])
@@ -85,6 +86,14 @@ model Contract {
   contractNumber  String    @unique
   totalValue      Float     // Nilai kontrak total
   termCount       Int       // Jumlah termin
+  status          String    @default("INTENT_DECLARED") // Global state
+  lockedAt        DateTime?
+  cooldownExpiresAt DateTime?
+  executionStartedAt DateTime?
+  evaluationStartedAt DateTime?
+  closedAt        DateTime?
+  ownerApproved   Boolean   @default(false)
+  contractorApproved Boolean @default(false)
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -94,6 +103,14 @@ model Contract {
   project         Project   @relation(fields: [projectId], references: [id])
 
   terms           Term[]
+  evaluations     EvaluationRecord[]
+  calculations    CalculationResult[]
+  finalRights     FinalRights?
+  distributions   DistributionInstruction[]
+  executionLogs   TransferExecutionLog[]
+  archive         ContractArchive?
+  finalReports    FinalReport[]
+  auditTrails     AuditTrail[]
 
   @@index([contractNumber])
 }
@@ -200,6 +217,188 @@ model Payment {
   term            Term      @relation(fields: [termId], references: [id])
 
   @@index([status])
+}
+
+// ============================================
+// EVALUATION & CALCULATION (STATE 4)
+// ============================================
+
+model EvaluationRecord {
+  id                 String   @id @default(uuid())
+  contractId         String   @unique
+  state              String   @default("EVALUATION_AND_CALCULATION")
+  waitingState       String   @default("WAITING_FOR_AUDIT")
+  isDataFrozen       Boolean  @default(true)
+  objectionStatus    String   @default("NONE")
+  correctionRounds   Int      @default(0)
+  objectionDeadline  DateTime?
+  correctionDeadline DateTime?
+  calculationHash    String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  contract           Contract @relation(fields: [contractId], references: [id])
+  calculationResults CalculationResult[]
+
+  @@index([waitingState])
+  @@index([objectionStatus])
+}
+
+model CalculationResult {
+  id                  String    @id @default(uuid())
+  contractId          String
+  evaluationId        String?
+  version             Int       @default(1)
+  breakdown           String    // JSON serialized
+  provisional         String    // JSON serialized
+  verifiedPerformance String    // JSON serialized
+  appliedClauses      String    // JSON serialized
+  objection           String?   // JSON serialized
+  isFinal             Boolean   @default(false)
+  approvedBy          String?
+  finalizedAt         DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  contract            Contract  @relation(fields: [contractId], references: [id])
+  evaluation          EvaluationRecord? @relation(fields: [evaluationId], references: [id])
+
+  @@index([contractId])
+  @@index([isFinal])
+}
+
+// ============================================
+// RIGHTS FINALIZATION & DISTRIBUTION (STATE 5)
+// ============================================
+
+model FinalRights {
+  id                 String   @id @default(uuid())
+  contractId         String   @unique
+  calculationHash    String
+  finalShareInvestor Float
+  finalShareOperator Float
+  fees               Float    @default(0)
+  penalties          Float    @default(0)
+  currency           String   @default("IDR")
+  approvedBy         String?
+  approvedAt         DateTime?
+  txStatus           String   @default("PENDING") // PENDING, CONFIRMED, FAILED
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  contract           Contract @relation(fields: [contractId], references: [id])
+  instructions       DistributionInstruction[]
+  executionLogs      TransferExecutionLog[]
+}
+
+model DistributionInstruction {
+  id            String   @id @default(uuid())
+  contractId    String
+  finalRightsId String
+  beneficiary   String
+  role          String   // INVESTOR, OPERATOR, FEE, PENALTY
+  amount        Float
+  status        String   @default("PENDING") // PENDING, CONFIRMED, FAILED
+  txHash        String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  finalRights    FinalRights @relation(fields: [finalRightsId], references: [id])
+  contract       Contract    @relation(fields: [contractId], references: [id])
+  executionLogs  TransferExecutionLog[]
+
+  @@index([contractId])
+  @@index([status])
+}
+
+model TransferExecutionLog {
+  id             String   @id @default(uuid())
+  contractId     String
+  finalRightsId  String
+  instructionId  String?
+  action         String
+  status         String
+  message        String
+  txHash         String?
+  executedBy     String?
+
+  createdAt      DateTime @default(now())
+
+  finalRights    FinalRights @relation(fields: [finalRightsId], references: [id])
+  contract       Contract    @relation(fields: [contractId], references: [id])
+  instruction    DistributionInstruction? @relation(fields: [instructionId], references: [id])
+
+  @@index([contractId])
+  @@index([action])
+  @@index([status])
+}
+
+// ============================================
+// CONTRACT ARCHIVE (STATE 6)
+// ============================================
+
+model ContractArchive {
+  id                   String   @id @default(uuid())
+  contractId           String   @unique
+  finalState           String   @default("CONTRACT_CLOSED_AND_ARCHIVED")
+  finalHash            String?
+  finalRightsSnapshot  String?  // JSON serialized
+  transitionLog        String?  // JSON serialized
+  transactionHashes    String?  // JSON serialized (comma-separated or JSON array)
+  phaseTimestamps      String?  // JSON serialized
+  distributionCompleted Boolean @default(false)
+  archivedAt           DateTime @default(now())
+  closedBy             String?
+  notes                String?
+
+  contract             Contract @relation(fields: [contractId], references: [id])
+  finalReport          FinalReport?
+  auditTrails          AuditTrail[]
+}
+
+model FinalReport {
+  id          String   @id @default(uuid())
+  contractId  String
+  archiveId   String   @unique
+  title       String
+  summary     String?
+  totalFunds  Float?
+  totalResult String?
+  durationDays Int?
+  documentUrl String?
+  createdAt   DateTime @default(now())
+
+  contract    Contract        @relation(fields: [contractId], references: [id])
+  archive     ContractArchive @relation(fields: [archiveId], references: [id])
+
+  @@index([contractId])
+  @@index([archiveId])
+}
+
+model AuditTrail {
+  id         String   @id @default(uuid())
+  contractId String
+  archiveId  String
+  action     String
+  message    String
+  actorId    String?
+  txHash     String?
+  createdAt  DateTime @default(now())
+
+  contract   Contract        @relation(fields: [contractId], references: [id])
+  archive    ContractArchive @relation(fields: [archiveId], references: [id])
+  actor      User?           @relation(fields: [actorId], references: [id])
+
+  @@index([contractId])
+  @@index([archiveId])
+  @@index([action])
 }
 
 // ============================================

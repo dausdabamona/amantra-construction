@@ -206,6 +206,26 @@ export const auditService = {
 };
 
 // ============================================
+// ARCHIVE ENDPOINTS
+// ============================================
+export const archiveService = {
+  closeContract: async (contractId: string, data: any) => {
+    const response = await apiClient.post(`/contract/${contractId}/close`, data);
+    return response.data;
+  },
+
+  getArchive: async (contractId: string) => {
+    const response = await apiClient.get(`/contract/${contractId}/archive`);
+    return response.data;
+  },
+
+  getHistory: async (contractId: string) => {
+    const response = await apiClient.get(`/contract/${contractId}/history`);
+    return response.data;
+  },
+};
+
+// ============================================
 // ERROR HANDLING
 // ============================================
 export const handleApiError = (error: any) => {
