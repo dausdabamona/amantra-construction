@@ -4,6 +4,24 @@
 
 Panduan ini menjelaskan langkah-langkah migrasi dari database SQLite lokal ke Supabase PostgreSQL untuk production deployment.
 
+## Quick Migration (Recommended)
+
+Gunakan script otomatis untuk migrasi cepat:
+
+```bash
+cd backend
+
+# Set environment variable
+export DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
+
+# Run migration script
+./scripts/switch-to-postgresql.sh
+```
+
+---
+
+## Manual Migration Steps
+
 ## Pre-Migration Checklist
 
 - [ ] Backup database lokal
@@ -105,11 +123,10 @@ npm run db:seed
        users: await prisma.user.findMany(),
        projects: await prisma.project.findMany(),
        contracts: await prisma.contract.findMany(),
-       workPhases: await prisma.workPhase.findMany(),
-       progressReports: await prisma.progressReport.findMany(),
+       terms: await prisma.term.findMany(),
+       progress: await prisma.progress.findMany(),
        verifications: await prisma.verification.findMany(),
        payments: await prisma.payment.findMany(),
-       evidenceFiles: await prisma.evidenceFile.findMany(),
        auditLogs: await prisma.auditLog.findMany(),
      };
      console.log(JSON.stringify(data, null, 2));

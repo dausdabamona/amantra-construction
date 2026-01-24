@@ -14,6 +14,7 @@ import { ProgressModule } from './progress/progress.module';
 import { VerificationsModule } from './verifications/verifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AuditModule } from './audit/audit.module';
+import { BlockchainModule } from './blockchain/blockchain.module';
 import { OperationModule } from './operation/operation.module';
 import { EvaluationModule } from './evaluation/evaluation.module';
 import { DistributionModule } from './distribution/distribution.module';
@@ -41,6 +42,7 @@ import { ArchiveModule } from './archive/archive.module';
     VerificationsModule,
     PaymentsModule,
     AuditModule,
+    BlockchainModule,
     OperationModule,
     EvaluationModule,
     DistributionModule,

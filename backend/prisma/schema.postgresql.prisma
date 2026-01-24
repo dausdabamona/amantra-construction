@@ -1,0 +1,234 @@
+// AMANTRA Construction MVP 0.1 - PostgreSQL Schema
+// Sistem Kontrak Konstruksi Berbasis Amanah - Production Database
+// Use this schema for Supabase/PostgreSQL deployment
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER - 4 ROLE ONLY
+// Roles: OWNER, CONTRACTOR, SUPERVISOR, WITNESS
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          String    // OWNER, CONTRACTOR, SUPERVISOR, WITNESS
+  name          String
+  phone         String?
+  company       String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  ownedProjects   Project[]         @relation("ProjectOwner")
+  contractedProjects Project[]      @relation("ProjectContractor")
+  supervisedProjects Project[]      @relation("ProjectSupervisor")
+  witnessedProjects  Project[]      @relation("ProjectWitness")
+  progressReports    Progress[]
+  verifications      Verification[]
+  auditLogs          AuditLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================
+// PROJECT
+// ============================================
+
+model Project {
+  id            String    @id @default(uuid())
+  name          String
+  description   String?
+  location      String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Owner
+  ownerId       String
+  owner         User      @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  // Kontraktor (assigned by owner)
+  contractorId  String?
+  contractor    User?     @relation("ProjectContractor", fields: [contractorId], references: [id])
+
+  // Pengawas (assigned by owner)
+  supervisorId  String?
+  supervisor    User?     @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
+
+  // Saksi (assigned by owner)
+  witnessId     String?
+  witness       User?     @relation("ProjectWitness", fields: [witnessId], references: [id])
+
+  // One project has one contract
+  contract      Contract?
+
+  @@index([ownerId])
+  @@index([contractorId])
+  @@index([supervisorId])
+  @@index([witnessId])
+}
+
+// ============================================
+// CONTRACT - 1 per Project
+// ============================================
+
+model Contract {
+  id              String    @id @default(uuid())
+  contractNumber  String    @unique
+  totalValue      Float     // Nilai kontrak total
+  termCount       Int       // Jumlah termin
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  projectId       String    @unique
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  terms           Term[]
+
+  @@index([contractNumber])
+}
+
+// ============================================
+// TERM (TERMIN)
+// Status: DRAFT, SUBMITTED, VERIFIED, VALID, REJECTED, PAID
+// ============================================
+
+model Term {
+  id              String      @id @default(uuid())
+  termNumber      Int         // Termin ke-berapa (1, 2, 3, ...)
+  name            String      // Nama termin (e.g., "Pekerjaan Pondasi")
+  description     String?
+  percentage      Float       // Persentase dari total kontrak (e.g., 30%)
+  value           Float       // Nilai termin dalam Rupiah
+  status          String      @default("DRAFT") // DRAFT, SUBMITTED, VERIFIED, VALID, REJECTED, PAID
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  contractId      String
+  contract        Contract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  progress        Progress[]
+  verifications   Verification[]
+  payment         Payment?
+
+  @@unique([contractId, termNumber])
+  @@index([contractId])
+  @@index([status])
+}
+
+// ============================================
+// PROGRESS - Upload progres oleh Kontraktor
+// ============================================
+
+model Progress {
+  id              String    @id @default(uuid())
+  description     String    // Deskripsi pekerjaan yang sudah dilakukan
+  photoUrl        String?   // URL foto bukti
+  claimPercentage Float     // Persentase klaim progres (e.g., 80%)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  termId          String
+  term            Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  uploadedById    String
+  uploadedBy      User      @relation(fields: [uploadedById], references: [id])
+
+  @@index([termId])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
+// ============================================
+// VERIFICATION - Verifikasi oleh Pengawas & Saksi
+// Role: SUPERVISOR, WITNESS
+// Status: PENDING, APPROVED, REJECTED
+// ============================================
+
+model Verification {
+  id              String    @id @default(uuid())
+  role            String    // SUPERVISOR, WITNESS
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  notes           String?   // Catatan verifikasi
+
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  termId          String
+  term            Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  verifierId      String
+  verifier        User      @relation(fields: [verifierId], references: [id])
+
+  @@unique([termId, role]) // Satu termin hanya bisa diverifikasi 1x per role
+  @@index([termId])
+  @@index([verifierId])
+}
+
+// ============================================
+// PAYMENT - Status pembayaran per termin
+// Status: PENDING, READY, PAID
+// ============================================
+
+model Payment {
+  id              String    @id @default(uuid())
+  amount          Float     // Jumlah yang dibayar
+  status          String    @default("PENDING") // PENDING, READY, PAID
+  proofUrl        String?   // URL bukti transfer
+  transactionRef  String?   // Nomor referensi transfer
+  paidAt          DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  termId          String    @unique
+  term            Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([paidAt])
+}
+
+// ============================================
+// AUDIT LOG - Semua aksi tercatat
+// ============================================
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  action      String    // CREATE, UPDATE, DELETE, LOGIN, SUBMIT_PROGRESS, VERIFY_APPROVE, VERIFY_REJECT, PAYMENT_CONFIRM
+  entityType  String    // "Project", "Contract", "Term", "Progress", "Verification", "Payment"
+  entityId    String
+  description String
+  oldValue    String?   // JSON
+  newValue    String?   // JSON
+
+  createdAt   DateTime  @default(now())
+
+  // Who did it
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+}
