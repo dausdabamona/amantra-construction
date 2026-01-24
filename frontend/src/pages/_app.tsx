@@ -2,11 +2,15 @@ import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { AppProvider } from '@/contexts/AppContext';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <>
-      <Head>
+    <AuthProvider>
+      <AppProvider>
+        <>
+          <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#1e40af" />
         <link rel="manifest" href="/manifest.json" />
@@ -33,6 +37,8 @@ export default function App({ Component, pageProps }: AppProps) {
           },
         }}
       />
-    </>
+        </>
+      </AppProvider>
+    </AuthProvider>
   );
 }

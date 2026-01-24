@@ -23,6 +23,8 @@
       "@/lib/*": ["./src/lib/*"],
       "@/hooks/*": ["./src/hooks/*"],
       "@/store/*": ["./src/store/*"],
+      "@/stores/*": ["./src/stores/*"],
+      "@/services/*": ["./src/services/*"],
       "@/types/*": ["./src/types/*"],
       "@/locales/*": ["./src/locales/*"]
     }

@@ -1,51 +1,46 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import Layout from '@/components/Layout';
-import { api } from '@/lib/api';
+import { useRouter } from 'next/router';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { projectService } from '@/services/api';
+import { useRequireAuth, useCurrency } from '@/hooks/useCustom';
 
 interface Project {
   id: string;
   name: string;
   description: string;
   location: string;
+  budget: number;
+  status: string;
   createdAt: string;
-  owner: { name: string };
-  contractor: { name: string };
-  supervisor: { name: string };
-  witness?: { name: string };
+  ownerId: string;
+  contractorId: string;
+  supervisorId: string;
+  witnessId?: string;
   contract?: {
     id: string;
     contractNumber: string;
     totalValue: number;
     termCount: number;
-    terms: Array<{
-      id: string;
-      termNumber: number;
-      name: string;
-      status: string;
-      value: number;
-      percentage: number;
-    }>;
   };
 }
 
 const statusColors: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
-  SUBMITTED: 'bg-blue-100 text-blue-800',
-  VERIFIED: 'bg-yellow-100 text-yellow-800',
-  VALID: 'bg-green-100 text-green-800',
-  REJECTED: 'bg-red-100 text-red-800',
-  PAID: 'bg-emerald-100 text-emerald-800',
+  PENDING: 'bg-blue-100 text-blue-800',
+  ACTIVE: 'bg-yellow-100 text-yellow-800',
+  COMPLETED: 'bg-green-100 text-green-800',
+  CANCELLED: 'bg-red-100 text-red-800',
 };
 
 const statusLabels: Record<string, string> = {
   DRAFT: 'Draft',
-  SUBMITTED: 'Diajukan',
-  VERIFIED: 'Diverifikasi',
-  VALID: 'Valid',
-  REJECTED: 'Ditolak',
-  PAID: 'Terbayar',
+  PENDING: 'Menunggu',
+  ACTIVE: 'Aktif',
+  COMPLETED: 'Selesai',
+  CANCELLED: 'Dibatalkan',
 };
 
 function formatCurrency(value: number) {
@@ -58,119 +53,184 @@ function formatCurrency(value: number) {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { isLoading: authLoading } = useRequireAuth();
+  const { formatCurrency } = useCurrency();
+
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    location: '',
+  });
 
   useEffect(() => {
-    loadProjects();
-  }, []);
-
-  async function loadProjects() {
-    try {
-      const data = await api<Project[]>('/projects');
-      setProjects(data);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-    } finally {
-      setLoading(false);
+    if (!authLoading && user) {
+      loadProjects();
     }
+  }, [user, authLoading]);
+
+  const loadProjects = async () => {
+    try {
+      setIsLoading(true);
+      const response = await projectService.getProjects(1, 20);
+      setProjects(response.data || response || []);
+    } catch (error: any) {
+      console.error('Failed to load projects:', error);
+      toast.error('Gagal memuat proyek');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await projectService.createProject(formData);
+      toast.success('Proyek berhasil dibuat');
+      setShowCreateModal(false);
+      setFormData({ name: '', description: '', location: '' });
+      loadProjects();
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal membuat proyek');
+    }
+  };
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Memuat proyek...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <Layout>
+    <>
       <Head>
-        <title>Proyek | AMANTRA</title>
+        <title>Proyek - AMANTRA Construction</title>
       </Head>
 
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Proyek</h1>
-            <p className="text-gray-600">Daftar proyek konstruksi Anda</p>
+      <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Proyek</h1>
+              <p className="text-gray-600 mt-1">Kelola proyek konstruksi Anda</p>
+            </div>
+            {(user?.role === 'OWNER' || user?.role === 'CONTRACTOR') && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                + Proyek Baru
+              </button>
+            )}
           </div>
-        </div>
 
-        {loading ? (
-          <div className="card p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-2 text-gray-500">Memuat...</p>
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="card p-8 text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <p className="mt-2 text-gray-500">Belum ada proyek</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {projects.map((project) => (
-              <Link key={project.id} href={`/projects/${project.id}`}>
-                <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+          {/* Projects Grid */}
+          {projects.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <svg className="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-gray-600 mt-4">Belum ada proyek</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => (
+                <div key={project.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push(`/projects/${project.id}`)}>
                   <div className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h2 className="text-lg font-semibold text-gray-900">{project.name}</h2>
-                        <p className="text-sm text-gray-500 mt-1">{project.location}</p>
-                        {project.description && (
-                          <p className="text-sm text-gray-600 mt-2">{project.description}</p>
-                        )}
-                      </div>
-                      {project.contract && (
-                        <div className="text-right ml-4">
-                          <p className="text-sm font-medium text-gray-900">
-                            {project.contract.contractNumber}
-                          </p>
-                          <p className="text-lg font-bold text-primary-600">
-                            {formatCurrency(project.contract.totalValue)}
-                          </p>
-                        </div>
-                      )}
+                    <div className="flex items-start justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-900">{project.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[project.status] || 'bg-gray-100 text-gray-800'}`}>
+                        {statusLabels[project.status] || project.status}
+                      </span>
                     </div>
 
-                    {/* Team */}
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
-                      <span>
-                        <span className="font-medium">Pemilik:</span> {project.owner.name}
-                      </span>
-                      <span>
-                        <span className="font-medium">Kontraktor:</span> {project.contractor.name}
-                      </span>
-                      <span>
-                        <span className="font-medium">Pengawas:</span> {project.supervisor.name}
-                      </span>
-                      {project.witness && (
-                        <span>
-                          <span className="font-medium">Saksi:</span> {project.witness.name}
-                        </span>
-                      )}
-                    </div>
+                    <p className="text-sm text-gray-600">{project.location}</p>
+                    {project.description && (
+                      <p className="text-sm text-gray-700 mt-2 line-clamp-2">{project.description}</p>
+                    )}
 
-                    {/* Terms Progress */}
-                    {project.contract?.terms && project.contract.terms.length > 0 && (
+                    {project.contract && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
-                        <p className="text-sm font-medium text-gray-700 mb-2">
-                          Status Termin ({project.contract.terms.length} termin)
+                        <p className="text-2xl font-bold text-blue-600">
+                          {formatCurrency(project.contract.totalValue)}
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                          {project.contract.terms.map((term) => (
-                            <div
-                              key={term.id}
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[term.status]}`}
-                            >
-                              T{term.termNumber}: {statusLabels[term.status]}
-                            </div>
-                          ))}
-                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{project.contract.termCount} termin</p>
                       </div>
                     )}
                   </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+
+          {/* Create Modal */}
+          {showCreateModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg max-w-md w-full">
+                <div className="p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Buat Proyek Baru</h2>
+                  <form onSubmit={handleCreateProject} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nama Proyek</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                      <input
+                        type="text"
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                      <textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateModal(false)}
+                        className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Buat
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </Layout>
+    </>
   );
 }
